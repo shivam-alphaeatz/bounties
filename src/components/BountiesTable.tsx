@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase, bucketMap } from '../supabaseClient';
 import BountyForm from './BountyForm';
 
 interface Bounty {
@@ -10,6 +10,18 @@ interface Bounty {
   lifespan: number;
   target_value: number;
   expiry: string | null;
+  created_at: string;
+  categories?: Array<{
+    name: string;
+    weight: number;
+  }>;
+}
+
+interface BountyBucketWeight {
+  id: number;
+  bountyId: number;
+  bucketId: number;
+  weight: number;
   created_at: string;
 }
 
@@ -24,16 +36,38 @@ const BountiesTable: React.FC = () => {
   const fetchBounties = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      const { data: bountiesData, error: bountiesError } = await supabase
         .from('bounties')
         .select('*')
         .order('date', { ascending: false });
 
-      if (error) {
-        throw error;
+      if (bountiesError) {
+        throw bountiesError;
       }
 
-      setBounties(data || []);
+      const { data: bucketWeightsData, error: bucketWeightsError } = await supabase
+        .from('bountyBucketWeight')
+        .select('*');
+
+      if (bucketWeightsError) {
+        throw bucketWeightsError;
+      }
+
+      const bountiesWithCategories = bountiesData.map((bounty: any) => {
+        const categories = bucketWeightsData
+          .filter((weight: BountyBucketWeight) => weight.bountyId === bounty.id)
+          .map((weight: BountyBucketWeight) => ({
+            name: bucketMap[weight.bucketId as keyof typeof bucketMap] || 'Unknown',
+            weight: weight.weight || 0
+          }));
+        
+        return {
+          ...bounty,
+          categories
+        };
+      });
+
+      setBounties(bountiesWithCategories || []);
     } catch (err) {
       console.error('Error fetching bounties:', err);
       setError('Failed to load bounties. Please try again later.');
@@ -153,7 +187,7 @@ const BountiesTable: React.FC = () => {
                 <th>Date</th>
                 <th>Bounty</th>
                 <th>Type</th>
-                <th>Lifespan (hours)</th>
+                <th>Categories</th>
                 <th>Target Value</th>
                 <th>Expiry</th>
                 <th>Actions</th>
@@ -170,9 +204,18 @@ const BountiesTable: React.FC = () => {
                     </span>
                   </td>
                   <td>
-                    <span className="lifespan-badge">
-                      {bounty.lifespan}
-                    </span>
+                    {bounty.categories && bounty.categories.length > 0 ? (
+                      <ul className="category-list">
+                        {bounty.categories.map((category, index) => (
+                          <li key={index}>
+                            <span className="category-name">{category.name}</span>
+                            <span className="category-weight">Weight: {category.weight}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <span className="no-categories">No categories</span>
+                    )}
                   </td>
                   <td>
                     <span className="target-value-badge">
@@ -212,4 +255,4 @@ const BountiesTable: React.FC = () => {
   );
 };
 
-export default BountiesTable; 
+export default BountiesTable;
