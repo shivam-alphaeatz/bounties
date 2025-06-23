@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import BountiesTable from './components/BountiesTable';
 import BountyBucketWeightTable from './components/BountyBucketWeightTable';
@@ -9,13 +9,36 @@ function App() {
   const [activeTab, setActiveTab] = useState<'bounties' | 'categories' | 'raw'>('bounties');
   const [isAIBountiesModalOpen, setIsAIBountiesModalOpen] = useState(false);
 
+  // Debug logging to track modal state changes
+  useEffect(() => {
+    console.log('App: AIBountiesModal state changed:', isAIBountiesModalOpen);
+  }, [isAIBountiesModalOpen]);
+
+  // Ensure modal starts closed and stays closed on mount
+  useEffect(() => {
+    console.log('App: Component mounted, ensuring modal is closed');
+    setIsAIBountiesModalOpen(false);
+  }, []);
+
+  const handleOpenAIBountiesModal = () => {
+    console.log('App: AI Bounties button clicked, opening modal');
+    setIsAIBountiesModalOpen(true);
+  };
+
+  const handleCloseAIBountiesModal = () => {
+    console.log('App: AI Bounties modal closing');
+    setIsAIBountiesModalOpen(false);
+  };
+
+  console.log('App: Rendering with modal state:', isAIBountiesModalOpen);
+
   return (
     <div className="App">
       <header className="App-header">
         <h1>Bounty Tracker</h1>
         <button 
           className="ai-bounties-button"
-          onClick={() => setIsAIBountiesModalOpen(true)}
+          onClick={handleOpenAIBountiesModal}
         >
           AI Bounties
         </button>
@@ -51,7 +74,7 @@ function App() {
 
       <AIBountiesModal 
         isOpen={isAIBountiesModalOpen}
-        onClose={() => setIsAIBountiesModalOpen(false)}
+        onClose={handleCloseAIBountiesModal}
       />
     </div>
   );

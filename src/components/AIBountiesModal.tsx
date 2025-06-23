@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './AIBountiesModal.css';
 import { BountyActionsService, BountyAction } from '../services/bountyActionsService';
-import { GoogleSheetsService, BountySheetData, BountyActionSheetData } from '../services/googleSheetsService';
 import { DatabaseTest } from '../utils/databaseTest';
 import { supabase } from '../supabaseClient';
 
@@ -95,6 +94,11 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
     bucketId: 0
   });
   const [rejectionReason, setRejectionReason] = useState<{[key: string]: string}>({});
+  
+  // Add refresh counters for each category (max 3 refreshes per category)
+  const [refreshCounts, setRefreshCounts] = useState<{[key: number]: number}>({
+    1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0
+  });
 
   // Bucket ID to Category mapping
   const bucketMap: { [key: number]: string } = {
@@ -174,10 +178,16 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
 
   // New function for category-specific refresh
   const fetchBountiesForCategory = async (bucketId: number) => {
+    // Check if we've reached the refresh limit for this category
+    if (refreshCounts[bucketId] >= 3) {
+      alert(`You've reached the maximum of 3 refreshes for ${bucketMap[bucketId]}. Please wait for new bounties to be generated.`);
+      return;
+    }
+
     const authToken = process.env.REACT_APP_SUPABASE_ANON_KEY;
     const edgeFunctionUrl = process.env.REACT_APP_SUPABASE_EDGE_FUNCTION_URL || 'https://nwfhqrmdjmjopbxulyhu.supabase.co/functions/v1/bountygen';
     
-    console.log(`Fetching bounties for category ${bucketId} (${bucketMap[bucketId]})`);
+    console.log(`Fetching bounties for category ${bucketId} (${bucketMap[bucketId]}) - Refresh #${refreshCounts[bucketId] + 1}`);
     
     try {
       const response = await fetch(edgeFunctionUrl, {
@@ -199,130 +209,232 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
       
       // Update only the specific category while preserving others
       setBounties(prevBounties => {
-        const updatedBounties = [...prevBounties];
-        const categoryIndex = updatedBounties.findIndex(b => b.bucket_id === bucketId);
-        
-        // Find the new data for this specific category
-        const newCategoryData = Array.isArray(data) 
-          ? data.find((b: Bounty) => b.bucket_id === bucketId)
-          : data;
-        
-        if (categoryIndex !== -1) {
-          // Replace the specific category's bounties
-          if (newCategoryData) {
-            updatedBounties[categoryIndex] = newCategoryData;
-          }
-        } else {
-          // If category doesn't exist, add it
-          if (newCategoryData) {
-            updatedBounties.push(newCategoryData);
-          }
-        }
-        
+        const updatedBounties = prevBounties.map(bucket => 
+          bucket.bucket_id === bucketId ? data[0] : bucket
+        );
         return updatedBounties;
       });
-      
+
+      // Increment refresh count for this category
+      setRefreshCounts(prev => ({
+        ...prev,
+        [bucketId]: prev[bucketId] + 1
+      }));
+
+      console.log(`Successfully refreshed category ${bucketId}. Refresh count: ${refreshCounts[bucketId] + 1}/3`);
     } catch (err) {
       console.error(`Error fetching bounties for category ${bucketId}:`, err);
-      alert(`Failed to refresh category ${bucketMap[bucketId]}. Please try again.`);
+      setError(`Failed to fetch new bounties for ${bucketMap[bucketId]}`);
     }
   };
 
+  // Group bounties into two categories
+  const group1Bounties = bounties.filter(bucket => [1, 2, 3].includes(bucket.bucket_id));
+  const group2Bounties = bounties.filter(bucket => [4, 5, 6].includes(bucket.bucket_id));
+
+  // Get approved and rejected actions
+  const approvedActions = bountyActions.filter(action => action.action === 'accepted');
+  const rejectedActions = bountyActions.filter(action => action.action === 'rejected');
+
+  useEffect(() => {
+    if (isOpen) {
+      console.log('AIBountiesModal: Modal opened, fetching bounties and loading actions');
+      fetchBounties(null);
+      loadSavedActions();
+    } else {
+      console.log('AIBountiesModal: Modal closed');
+    }
+  }, [isOpen, fetchBounties]);
+
+  // Add keyboard event listener for Escape key
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isOpen) {
+        // Don't close if rejection modal is open
+        if (rejectionModal.isOpen) {
+          console.log('AIBountiesModal: Escape key pressed but rejection modal is open, ignoring');
+          return;
+        }
+        console.log('AIBountiesModal: Escape key pressed, closing modal');
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+      // Prevent body scroll when modal is open
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen, onClose, rejectionModal.isOpen]);
+
+  console.log('AIBountiesModal: Rendering with isOpen:', isOpen);
+
   const loadSavedActions = async () => {
     try {
-      // Try to load from database first
       const savedActions = await BountyActionsService.getBountyActions();
       setBountyActions(savedActions);
     } catch (error) {
+      console.error('Error loading saved actions:', error);
       // Fallback to localStorage
       const localActions = BountyActionsService.loadFromLocalStorage();
       setBountyActions(localActions);
     }
   };
 
-  useEffect(() => {
-    if (isOpen) {
-      // Initially fetch all categories with null id
-      fetchBounties(null);
-      loadSavedActions();
-    }
-  }, [isOpen]);
-
   const handleBountyAction = async (bucketId: number, bounty: string, action: 'accepted' | 'rejected') => {
     if (action === 'rejected') {
-      // Open rejection modal for rejected bounties
       setRejectionModal({
         isOpen: true,
         bounty,
-        category: bucketMap[bucketId] || `Category ${bucketId}`,
+        category: bucketMap[bucketId],
         bucketId
       });
-      return;
+    } else {
+      await processBountyAction(bucketId, bounty, action, '');
     }
-
-    // Handle approval directly
-    await processBountyAction(bucketId, bounty, action, '');
   };
 
   const processBountyAction = async (bucketId: number, bounty: string, action: 'accepted' | 'rejected', reason: string) => {
-    // Check if this bounty has already been acted upon to prevent duplicates
-    const existingAction = bountyActions.find(a => a.bounty === bounty);
-    if (existingAction) {
-      console.log(`Bounty "${bounty}" has already been ${existingAction.action}. Skipping duplicate action.`);
-      return;
-    }
-
+    console.log(`Processing ${action} action for bounty: ${bounty}`);
+    
     const newAction: BountyAction = {
       bucket_id: bucketId,
       bounty,
       action,
       timestamp: new Date(),
-      category: bucketMap[bucketId] || `Category ${bucketId}`,
-      rejection_reason: action === 'rejected' ? reason : undefined
+      category: bucketMap[bucketId],
+      rejection_reason: reason || undefined
     };
 
-    const updatedActions = [...bountyActions, newAction];
-    setBountyActions(updatedActions);
-    
-    // Remove the bounty from the current list in the UI
-    setBounties(prev => prev.map(bucket => {
-      if (bucket.bucket_id === bucketId) {
-        return {
-          ...bucket,
-          bounties: bucket.bounties.filter(b => b !== bounty)
-        };
-      }
-      return bucket;
-    }));
+    // For rejections, save immediately to database
+    if (action === 'rejected') {
+      try {
+        console.log('Saving rejection to database...');
+        const { error } = await supabase
+          .from('rejected_bounties')
+          .insert({
+            bounty: bounty,
+            category: bucketMap[bucketId],
+            bucket_id: bucketId,
+            rejection_reason: reason || null,
+            rejected_at: new Date().toISOString()
+          });
 
-    // Save to localStorage immediately as a backup
-    BountyActionsService.saveToLocalStorage(updatedActions);
+        if (error) {
+          console.error('Error saving rejection to database:', error);
+          // Don't throw error here - continue with localStorage save
+        } else {
+          console.log('Rejection saved to database successfully');
+        }
+      } catch (error) {
+        console.error('Failed to save rejection to database:', error);
+        // Don't throw error here - continue with localStorage save
+      }
+    }
+
+    // For approvals, save immediately to database
+    if (action === 'accepted') {
+      try {
+        console.log('Saving approval to database...');
+        const { error } = await supabase
+          .from('approved_bounties')
+          .insert({
+            bounty: bounty,
+            category: bucketMap[bucketId],
+            bucket_id: bucketId,
+            approved_at: new Date().toISOString()
+          });
+
+        if (error) {
+          console.error('Error saving approval to database:', error);
+          // Don't throw error here - continue with localStorage save
+        } else {
+          console.log('Approval saved to database successfully');
+        }
+      } catch (error) {
+        console.error('Failed to save approval to database:', error);
+        // Don't throw error here - continue with localStorage save
+      }
+    }
+
+    // Save to localStorage and update state
+    try {
+      console.log('Saving action to localStorage...');
+      await BountyActionsService.saveBountyAction(newAction);
+      setBountyActions(prev => {
+        const updated = [...prev, newAction];
+        console.log('Updated bountyActions:', updated);
+        return updated;
+      });
+      
+      if (reason) {
+        setRejectionReason(prev => ({ ...prev, [bounty]: reason }));
+      }
+      
+      console.log(`Successfully processed ${action} action for bounty: ${bounty}`);
+    } catch (error) {
+      console.error('Error saving action to localStorage:', error);
+      // Even if localStorage fails, update the state to show the action
+      setBountyActions(prev => [...prev, newAction]);
+    }
   };
 
   const handleRejectionConfirm = async (reason: string) => {
-    await processBountyAction(
-      rejectionModal.bucketId,
-      rejectionModal.bounty,
-      'rejected',
-      reason
-    );
-    setRejectionModal({ isOpen: false, bounty: '', category: '', bucketId: 0 });
+    console.log('Rejection confirmed with reason:', reason);
+    try {
+      await processBountyAction(
+        rejectionModal.bucketId,
+        rejectionModal.bounty,
+        'rejected',
+        reason
+      );
+      console.log('Rejection processed successfully, closing rejection modal');
+      setRejectionModal({ isOpen: false, bounty: '', category: '', bucketId: 0 });
+      
+      // Show a brief success message
+      const successMessage = document.createElement('div');
+      successMessage.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #10b981;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        z-index: 2000;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+      `;
+      successMessage.textContent = 'Bounty rejected and saved successfully!';
+      document.body.appendChild(successMessage);
+      
+      // Remove the message after 3 seconds
+      setTimeout(() => {
+        if (document.body.contains(successMessage)) {
+          document.body.removeChild(successMessage);
+        }
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Error processing rejection:', error);
+      // Don't close the rejection modal if there's an error
+      alert('Error processing rejection. Please try again.');
+    }
   };
 
   const handleRejectionCancel = () => {
+    console.log('Rejection cancelled');
     setRejectionModal({ isOpen: false, bounty: '', category: '', bucketId: 0 });
   };
 
   const getAvailableBounties = (bucketId: number) => {
     const bucket = bounties.find(b => b.bucket_id === bucketId);
-    if (!bucket) return [];
-    
-    // Filter out bounties that have already been acted upon
-    const actedBounties = bountyActions
-      .filter(action => action.bucket_id === bucketId)
-      .map(action => action.bounty);
-    
-    return bucket.bounties.filter(bounty => !actedBounties.includes(bounty));
+    return bucket ? bucket.bounties : [];
   };
 
   const hasAvailableBounties = (bucketId: number) => {
@@ -336,44 +448,45 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
   const saveAllToDatabase = async () => {
     setSaving(true);
     try {
-      console.log('Attempting to save all bounty actions:', bountyActions);
-      
-      if (bountyActions.length === 0) {
-        alert('No new bounty actions to save!');
-        setSaving(false);
-        return;
-      }
+      // Save all actions to database
+      for (const action of bountyActions) {
+        if (action.action === 'accepted') {
+          // Save approved bounties
+          const { error } = await supabase
+            .from('approved_bounties')
+            .insert({
+              bounty: action.bounty,
+              category: action.category,
+              bucket_id: action.bucket_id,
+              approved_at: action.timestamp.toISOString()
+            });
 
-      // Save to Supabase database (primary storage)
-      await BountyActionsService.saveBountyActions(bountyActions);
-      console.log('Successfully saved to Supabase database');
-      
-      // Clear the actions from state and localStorage after successful save
-      setBountyActions([]);
-      BountyActionsService.saveToLocalStorage([]);
-      
-      alert('✅ Bounty actions saved successfully to database!');
-      
-    } catch (dbError) {
-      console.error('Failed to save to database:', dbError);
-      
-      // Keep data locally if DB save fails
-      BountyActionsService.saveToLocalStorage(bountyActions);
-      
-      let errorMessage = 'Failed to save to database. Data is saved locally as a backup.';
-      if (dbError instanceof Error) {
-        if (dbError.message.includes('relation "bounty_selection_history" does not exist')) {
-          errorMessage = 'Database table "bounty_selection_history" does not exist. Please create the table first.';
-        } else if (dbError.message.includes('connection')) {
-          errorMessage = 'Database connection failed. Please check your Supabase credentials.';
-        } else if (dbError.message.includes('permission')) {
-          errorMessage = 'Database permission denied. Please check your Supabase RLS policies.';
+          if (error) {
+            console.error('Error saving approved bounty:', error);
+          }
         } else {
-          errorMessage += `\n\nError: ${dbError.message}`;
+          // Save rejected bounties
+          const { error } = await supabase
+            .from('rejected_bounties')
+            .insert({
+              bounty: action.bounty,
+              category: action.category,
+              bucket_id: action.bucket_id,
+              rejection_reason: action.rejection_reason,
+              rejected_at: action.timestamp.toISOString()
+            });
+
+          if (error) {
+            console.error('Error saving rejected bounty:', error);
+          }
         }
       }
-      
-      alert(errorMessage);
+
+      console.log('All actions saved to database successfully');
+      alert('All actions saved to database successfully!');
+    } catch (error) {
+      console.error('Error saving to database:', error);
+      alert('Error saving to database. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -381,11 +494,10 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
 
   const testDatabaseConnection = async () => {
     try {
-      const result = await DatabaseTest.runFullTest();
-      alert(result);
+      const result = await DatabaseTest.testConnection();
+      alert(`Database test result: ${result}`);
     } catch (error) {
-      console.error('Database test failed:', error);
-      alert('Database test failed. Please check the console for details.');
+      alert(`Database test failed: ${error}`);
     }
   };
 
@@ -395,8 +507,8 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
       .map(action => ({
         name: action.bounty,
         category: action.category || `Category ${action.bucket_id}`,
-        weight: 1,
-        expiry_days: 1
+        weight: 5, // Default weight
+        expiry_days: 24 // Default expiry
       }));
     
     setBountiesToSubmit(approvedBounties);
@@ -404,178 +516,146 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
   };
 
   const updateBountyToSubmit = (index: number, field: keyof BountyToSubmit, value: string | number) => {
-    setBountiesToSubmit(prev => prev.map((bounty, i) => 
-      i === index ? { ...bounty, [field]: value } : bounty
-    ));
+    setBountiesToSubmit(prev => 
+      prev.map((bounty, i) => 
+        i === index ? { ...bounty, [field]: value } : bounty
+      )
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Prevent multiple submissions
-    if (submitting) {
-      console.log('Submission already in progress. Ignoring duplicate click.');
-      return;
-    }
-    
     setSubmitting(true);
-    
-    const approvedActions = bountyActions.filter(action => action.action === 'accepted');
-    const rejectedActions = bountyActions.filter(action => action.action === 'rejected');
-
-    if (approvedActions.length === 0 && rejectedActions.length === 0) {
-      alert('No bounties to submit!');
-      setSubmitting(false);
-      return;
-    }
 
     try {
-      console.log(`Submitting ${approvedActions.length} approved and ${rejectedActions.length} rejected bounties`);
-      
-      // Step 1: Save all actions (approved and rejected) to the history table.
-      // This ensures rejected bounties are saved even if approved ones fail later.
-      if (bountyActions.length > 0) {
-        await BountyActionsService.saveBountyActions(bountyActions);
-        console.log('Successfully saved all actions to bounty_selection_history');
+      // Save to main bounties table (approved bounties are already in approved_bounties table)
+      for (const bounty of bountiesToSubmit) {
+        const { error } = await supabase
+          .from('bounties')
+          .insert({
+            name: bounty.name,
+            category: bounty.category,
+            weight: bounty.weight,
+            expiry_days: bounty.expiry_days,
+            date: new Date().toISOString().split('T')[0],
+            type: 'AI Generated',
+            target_value: 1
+          });
+
+        if (error) {
+          console.error('Error saving bounty to main table:', error);
+        }
       }
 
-      // Step 2: If there are approved bounties, insert them into the main 'bounties' and 'bountyBucketWeight' tables.
-      if (approvedActions.length > 0) {
-          const now = new Date();
-          const expiry = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  
-          const newBountiesToInsert = approvedActions.map(action => {
-            const originalBounty = bounties.find(b => b.bounties.includes(action.bounty));
-            return {
-              date: now.toISOString().split('T')[0], // Current date in YYYY-MM-DD format
-              bounty: action.bounty, // Use 'bounty' field name, not 'description'
-              type: 'daily', // Default type
-              lifespan: 24, // 24 hours
-              target_value: 1, // Default target value
-              expiry: expiry.toISOString(),
-            };
-          });
-  
-          console.log('Inserting bounties:', newBountiesToInsert.map(b => b.bounty));
-  
-          const { data: insertedBounties, error: bountiesError } = await supabase
-            .from('bounties')
-            .insert(newBountiesToInsert)
-            .select('id, bounty'); // Select 'bounty' field, not 'name'
-  
-          if (bountiesError) throw bountiesError;
-          if (!insertedBounties) throw new Error("Failed to get IDs from inserted bounties.");
-  
-          console.log('Successfully inserted bounties:', insertedBounties);
-  
-          const bucketWeights = insertedBounties.map(insertedBounty => {
-            const originalAction = approvedActions.find(a => a.bounty === insertedBounty.bounty); // Match on 'bounty' field
-            if (!originalAction) {
-              throw new Error(`Could not find original action for bounty name ${insertedBounty.bounty}`);
-            }
-            return {
-              bountyId: insertedBounty.id, // Use 'bountyId' field name
-              bucketId: originalAction.bucket_id, // Use 'bucketId' field name
-              weight: 1 // Default weight
-            };
-          });
-  
-          console.log('Inserting bucket weights:', bucketWeights);
-  
-          const { error: weightsError } = await supabase
-            .from('bountyBucketWeight')
-            .insert(bucketWeights);
-  
-          if (weightsError) throw weightsError;
-          console.log('Successfully submitted approved bounties to main tables.');
-      }
+      alert(`Successfully submitted ${bountiesToSubmit.length} bounties to the main bounties table!`);
       
-      alert('✅ Bounties processed successfully!');
-
-      // Step 3: Update UI state - remove actioned bounties from view without a full refresh.
-      const actionedBountyNames = new Set(bountyActions.map(a => a.bounty));
-      const remainingBountiesInBuckets = bounties.map(bucket => ({
-          ...bucket,
-          bounties: bucket.bounties.filter(name => !actionedBountyNames.has(name))
-      })).filter(bucket => bucket.bounties.length > 0);
-      
-      setBounties(remainingBountiesInBuckets);
-
-      // Step 4: Clear state and localStorage for the processed actions
-      setBountyActions([]);
-      BountyActionsService.saveToLocalStorage([]);
+      // Clear the form and go back to main view
       setShowSubmitForm(false);
       setBountiesToSubmit([]);
-
+      
+      // Clear approved actions from localStorage since they've been submitted
+      const remainingActions = bountyActions.filter(action => action.action === 'rejected');
+      BountyActionsService.saveToLocalStorage(remainingActions);
+      setBountyActions(remainingActions);
+      
     } catch (error) {
-      console.error('Error in submission process:', error);
-      alert('An error occurred during the submission process. Please check the console.');
+      console.error('Error submitting bounties:', error);
+      alert('Error submitting bounties. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (!isOpen) return null;
+  const removeApprovedBounty = async (bountyName: string) => {
+    console.log(`Removing approved bounty: ${bountyName}`);
+    
+    // Remove from bountiesToSubmit
+    setBountiesToSubmit(prev => prev.filter(bounty => bounty.name !== bountyName));
+    
+    // Remove from bountyActions and localStorage
+    const updatedActions = bountyActions.filter(action => action.bounty !== bountyName);
+    setBountyActions(updatedActions);
+    
+    // Update localStorage
+    BountyActionsService.saveToLocalStorage(updatedActions);
 
-  // Derived state for easier access in render
-  const approvedActions = bountyActions.filter(a => a.action === 'accepted');
-  const rejectedActions = bountyActions.filter(a => a.action === 'rejected');
+    // Remove from database
+    try {
+      console.log('Removing bounty from database...');
+      const { error } = await supabase
+        .from('approved_bounties')
+        .delete()
+        .eq('bounty', bountyName);
 
-  const group1Categories = ['Active Life', 'Nourish', 'Rest'];
-  
-  // Create a Set for faster lookups
-  const group1CategorySet = new Set(group1Categories);
-
-  const group1Bounties = bounties.filter(b => group1CategorySet.has(bucketMap[b.bucket_id]));
-  const group2Bounties = bounties.filter(b => !group1CategorySet.has(bucketMap[b.bucket_id]));
+      if (error) {
+        console.error('Error removing bounty from database:', error);
+        alert('Warning: Bounty was removed from the list but there was an error removing it from the database.');
+      } else {
+        console.log('Bounty successfully removed from database');
+      }
+    } catch (error) {
+      console.error('Failed to remove bounty from database:', error);
+      alert('Warning: Bounty was removed from the list but there was an error removing it from the database.');
+    }
+  };
 
   const renderBountyList = (bountyList: Bounty[]) => {
     return bountyList.map(bucket => {
-        // Filter out bounties that have already been acted upon in this session
-        const availableBounties = bucket.bounties.filter(bountyName => 
-            !bountyActions.some(action => action.bounty === bountyName)
-        );
+        // Show all bounties, including those that have been acted upon
+        const allBounties = bucket.bounties;
+        const refreshCount = refreshCounts[bucket.bucket_id] || 0;
+        const canRefresh = refreshCount < 3;
 
         return (
             <div key={bucket.bucket_id} className="bounty-category-item">
                 <div className="category-header">
                   <h4>{bucketMap[bucket.bucket_id] || `Category ${bucket.bucket_id}`}</h4>
-                  <button
-                    className="refresh-category-button"
-                    onClick={() => fetchBountiesForCategory(bucket.bucket_id)}
-                    title={`Get new bounties for ${bucketMap[bucket.bucket_id] || `Category ${bucket.bucket_id}`}`}
-                  >
-                    Add New
-                  </button>
+                  <div className="refresh-info">
+                    <span className="refresh-count">Refreshes: {refreshCount}/3</span>
+                    <button
+                      className={`refresh-category-button ${!canRefresh ? 'disabled' : ''}`}
+                      onClick={() => canRefresh && fetchBountiesForCategory(bucket.bucket_id)}
+                      disabled={!canRefresh}
+                      title={canRefresh 
+                        ? `Get new bounties for ${bucketMap[bucket.bucket_id] || `Category ${bucket.bucket_id}`}`
+                        : `Maximum refreshes reached for ${bucketMap[bucket.bucket_id] || `Category ${bucket.bucket_id}`}`
+                      }
+                    >
+                      {canRefresh ? 'Add New' : 'Limit Reached'}
+                    </button>
+                  </div>
                 </div>
                 <div className="bounties-list-items">
-                    {availableBounties.length > 0 ? (
-                        availableBounties.map((bountyName) => {
+                    {allBounties.length > 0 ? (
+                        allBounties.map((bountyName) => {
                             const existingAction = bountyActions.find(a => a.bounty === bountyName);
                             const isDisabled = !!existingAction;
                             
                             return (
-                                <div key={bountyName} className={`bounty-item ${isDisabled ? 'disabled' : ''}`}>
+                                <div key={bountyName} className={`bounty-item ${isDisabled ? 'acted-upon' : ''}`}>
                                     <p className="bounty-text">{bountyName}</p>
                                     {existingAction ? (
                                         <div className="bounty-status">
                                             <span className={`status-badge ${existingAction.action === 'accepted' ? 'approved' : 'rejected'}`}>
                                                 {existingAction.action === 'accepted' ? '✓ Approved' : '✗ Rejected'}
                                             </span>
+                                            {existingAction.rejection_reason && (
+                                                <div className="reason-display">
+                                                    <small>Reason: {existingAction.rejection_reason}</small>
+                                                </div>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="bounty-actions">
                                             <button 
                                                 className="approve-button" 
                                                 onClick={() => handleBountyAction(bucket.bucket_id, bountyName, 'accepted')}
-                                                disabled={isDisabled}
                                             >
                                                 Approve
                                             </button>
                                             <button 
                                                 className="reject-button" 
                                                 onClick={() => handleBountyAction(bucket.bucket_id, bountyName, 'rejected')}
-                                                disabled={isDisabled}
                                             >
                                                 Reject
                                             </button>
@@ -588,10 +668,11 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
                         <div className="no-bounties-message">
                             <p>No available bounties in this category</p>
                             <button 
-                                className="get-more-bounties-button"
-                                onClick={() => fetchBountiesForCategory(bucket.bucket_id)}
+                                className={`get-more-bounties-button ${!canRefresh ? 'disabled' : ''}`}
+                                onClick={() => canRefresh && fetchBountiesForCategory(bucket.bucket_id)}
+                                disabled={!canRefresh}
                             >
-                                Get More Bounties
+                                {canRefresh ? 'Get More Bounties' : 'Refresh Limit Reached'}
                             </button>
                         </div>
                     )}
@@ -602,169 +683,158 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
   }
 
   return (
-    <div className="ai-bounties-modal-overlay">
-      <div className="ai-bounties-modal">
-        <div className="ai-bounties-modal-header">
-          <h2>AI Bounties</h2>
-          <button className="close-button" onClick={onClose}>×</button>
-        </div>
-
-        <div className="ai-bounties-modal-content">
-          {loading && <div className="loading">Loading bounties...</div>}
-          
-          {error && (
-            <div className="error">
-              <p><strong>Error Details:</strong></p>
-              <pre style={{ 
-                whiteSpace: 'pre-wrap', 
-                fontSize: '12px', 
-                backgroundColor: '#f8f9fa', 
-                padding: '10px', 
-                borderRadius: '4px',
-                maxHeight: '200px',
-                overflow: 'auto'
-              }}>
-                {error}
-              </pre>
-              <div style={{ marginTop: '10px' }}>
-                <button onClick={() => fetchBounties(null)}>Retry</button>
-              </div>
+    <>
+      {isOpen && (
+        <div 
+          className="ai-bounties-modal-overlay" 
+          onClick={(e) => {
+            // Don't close if rejection modal is open
+            if (rejectionModal.isOpen) {
+              console.log('AIBountiesModal: Click outside but rejection modal is open, ignoring');
+              return;
+            }
+            console.log('AIBountiesModal: Click outside, closing modal');
+            onClose();
+          }}
+        >
+          <div className="ai-bounties-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ai-bounties-modal-header">
+              <h2>AI Bounties</h2>
+              <button className="close-button" onClick={onClose}>×</button>
             </div>
-          )}
 
-          {!loading && !error && !showSubmitForm && (
-            <>
-              <div className="bounties-container">
-                <div className="bounty-category-group">
-                  <h3>Active Life, Nourish & Rest</h3>
-                  {renderBountyList(group1Bounties)}
-                </div>
-                <hr className="category-divider" />
-                <div className="bounty-category-group">
-                  <h3>Connect, Mindset & Explore</h3>
-                  {renderBountyList(group2Bounties)}
-                </div>
-              </div>
-
-              {bountyActions.length > 0 && (
-                <div className="actions-summary">
-                  <h3>Actions Summary ({bountyActions.length} total)</h3>
-                  <div className="summary-stats">
-                    <span>Approved: {approvedActions.length}</span>
-                    <span>Rejected: {rejectedActions.length}</span>
-                  </div>
-                  <div className="summary-actions">
-                    <button className="export-button" onClick={exportToCSV}>
-                      Export to CSV
-                    </button>
-                    <button 
-                      className="save-db-button" 
-                      onClick={saveAllToDatabase}
-                      disabled={saving || bountyActions.length === 0}
-                    >
-                      {saving ? 'Saving...' : `Save ${bountyActions.length} Actions to DB`}
-                    </button>
-                    <button 
-                      className="test-db-button"
-                      onClick={testDatabaseConnection}
-                      title="Test database connection and table setup"
-                    >
-                      Test DB
-                    </button>
-                    {approvedActions.length > 0 && (
-                      <button 
-                        className="submit-button" 
-                        onClick={prepareBountiesForSubmission}
-                      >
-                        Submit Approved to Main Table
-                      </button>
-                    )}
+            <div className="ai-bounties-modal-content">
+              {loading && <div className="loading">Loading bounties...</div>}
+              
+              {error && (
+                <div className="error">
+                  <p><strong>Error Details:</strong></p>
+                  <pre style={{ 
+                    whiteSpace: 'pre-wrap', 
+                    fontSize: '12px', 
+                    backgroundColor: '#f8f9fa', 
+                    padding: '10px', 
+                    borderRadius: '4px',
+                    maxHeight: '200px',
+                    overflow: 'auto'
+                  }}>
+                    {error}
+                  </pre>
+                  <div style={{ marginTop: '10px' }}>
+                    <button onClick={() => fetchBounties(null)}>Retry</button>
                   </div>
                 </div>
               )}
-            </>
-          )}
 
-          {showSubmitForm && (
-            <div className="submit-form">
-              <h3>Submit Approved Bounties to Main Table</h3>
-              <p>Review and adjust the settings for each approved bounty before submitting:</p>
-              
-              <div className="sheet-actions">
-                <button 
-                  className="open-sheet-button"
-                  onClick={() => GoogleSheetsService.openSheetInNewTab()}
-                >
-                  Open Google Sheets
-                </button>
-                <span className="sheet-info">Data will be copied to clipboard for easy pasting</span>
-              </div>
-              
-              <div className="bounties-to-submit">
-                {bountiesToSubmit.map((bounty, index) => (
-                  <div key={index} className="bounty-submit-item">
-                    <div className="bounty-submit-header">
-                      <h4>{bounty.name}</h4>
-                      <span className="category-badge">{bounty.category}</span>
+              {!loading && !error && !showSubmitForm && (
+                <>
+                  <div className="bounties-container">
+                    <div className="bounty-category-group">
+                      <h3>Active Life, Nourish & Rest</h3>
+                      {renderBountyList(group1Bounties)}
                     </div>
-                    <div className="bounty-submit-settings">
-                      <div className="setting-group">
-                        <label htmlFor={`weight-${index}`}>Weight:</label>
-                        <input
-                          id={`weight-${index}`}
-                          type="number"
-                          min="1"
-                          max="10"
-                          value={bounty.weight}
-                          onChange={(e) => updateBountyToSubmit(index, 'weight', parseInt(e.target.value) || 1)}
-                          title="Set the weight for this bounty (1-10)"
-                        />
-                      </div>
-                      <div className="setting-group">
-                        <label htmlFor={`expiry-${index}`}>Expiry (days):</label>
-                        <input
-                          id={`expiry-${index}`}
-                          type="number"
-                          min="1"
-                          max="30"
-                          value={bounty.expiry_days}
-                          onChange={(e) => updateBountyToSubmit(index, 'expiry_days', parseInt(e.target.value) || 1)}
-                          title="Set the expiry period in days (1-30)"
-                        />
-                      </div>
+                    <hr className="category-divider" />
+                    <div className="bounty-category-group">
+                      <h3>Connect, Mindset & Explore</h3>
+                      {renderBountyList(group2Bounties)}
                     </div>
                   </div>
-                ))}
-              </div>
 
-              <div className="submit-form-actions">
-                <button 
-                  className="cancel-button"
-                  onClick={() => setShowSubmitForm(false)}
-                >
-                  Cancel
-                </button>
-                <button 
-                  className="submit-final-button"
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                >
-                  {submitting ? 'Submitting...' : `Submit ${bountiesToSubmit.length} Bounties`}
-                </button>
-              </div>
+                  {approvedActions.length > 0 && (
+                    <div className="submit-section">
+                      <div className="submit-info">
+                        <span className="approved-count">{approvedActions.length} bounty{approvedActions.length !== 1 ? 'ies' : 'y'} approved</span>
+                        <button 
+                          className="submit-button" 
+                          onClick={prepareBountiesForSubmission}
+                        >
+                          Submit Approved Bounties
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {showSubmitForm && (
+                <div className="submit-form">
+                  <h3>Submit Approved Bounties to Main Table</h3>
+                  <p>Review and adjust the settings for each approved bounty before submitting:</p>
+                  
+                  <div className="bounties-to-submit">
+                    {bountiesToSubmit.map((bounty, index) => (
+                      <div key={index} className="bounty-submit-item">
+                        <div className="bounty-submit-header">
+                          <h4>{bounty.name}</h4>
+                          <span className="category-badge">{bounty.category}</span>
+                          <button 
+                            className="remove-bounty-button"
+                            onClick={() => removeApprovedBounty(bounty.name)}
+                            title="Remove this bounty from submission"
+                          >
+                            ✕ Remove
+                          </button>
+                        </div>
+                        <div className="bounty-submit-settings">
+                          <div className="setting-group">
+                            <label htmlFor={`weight-${index}`}>Weight:</label>
+                            <input
+                              id={`weight-${index}`}
+                              type="number"
+                              min="1"
+                              max="10"
+                              value={bounty.weight}
+                              onChange={(e) => updateBountyToSubmit(index, 'weight', parseInt(e.target.value) || 1)}
+                              title="Set the weight for this bounty (1-10)"
+                            />
+                          </div>
+                          <div className="setting-group">
+                            <label htmlFor={`expiry-${index}`}>Expiry (days):</label>
+                            <input
+                              id={`expiry-${index}`}
+                              type="number"
+                              min="1"
+                              max="30"
+                              value={bounty.expiry_days}
+                              onChange={(e) => updateBountyToSubmit(index, 'expiry_days', parseInt(e.target.value) || 1)}
+                              title="Set the expiry period in days (1-30)"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="submit-form-actions">
+                    <button 
+                      className="cancel-button"
+                      onClick={() => setShowSubmitForm(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      className="submit-final-button"
+                      onClick={handleSubmit}
+                      disabled={submitting}
+                    >
+                      {submitting ? 'Submitting...' : `Submit ${bountiesToSubmit.length} Bounties`}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      <RejectionModal
-        isOpen={rejectionModal.isOpen}
-        bounty={rejectionModal.bounty}
-        category={rejectionModal.category}
-        onConfirm={handleRejectionConfirm}
-        onCancel={handleRejectionCancel}
-      />
-    </div>
+          <RejectionModal
+            isOpen={rejectionModal.isOpen}
+            bounty={rejectionModal.bounty}
+            category={rejectionModal.category}
+            onConfirm={handleRejectionConfirm}
+            onCancel={handleRejectionCancel}
+          />
+        </div>
+      )}
+    </>
   );
 };
 
