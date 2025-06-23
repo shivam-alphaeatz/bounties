@@ -3,14 +3,22 @@ import './App.css';
 import BountiesTable from './components/BountiesTable';
 import BountyBucketWeightTable from './components/BountyBucketWeightTable';
 import RawBountyBucketWeightTable from './components/RawBountyBucketWeightTable';
+import AIBountiesModal from './components/AIBountiesModal';
 
 function App() {
   const [activeTab, setActiveTab] = useState<'bounties' | 'categories' | 'raw'>('bounties');
+  const [isAIBountiesModalOpen, setIsAIBountiesModalOpen] = useState(false);
 
   return (
     <div className="App">
       <header className="App-header">
         <h1>Bounty Tracker</h1>
+        <button 
+          className="ai-bounties-button"
+          onClick={() => setIsAIBountiesModalOpen(true)}
+        >
+          AI Bounties
+        </button>
       </header>
       <main className="App-main">
         <div className="tabs">
@@ -40,6 +48,11 @@ function App() {
           {activeTab === 'raw' && <RawBountyBucketWeightTable />}
         </div>
       </main>
+
+      <AIBountiesModal 
+        isOpen={isAIBountiesModalOpen}
+        onClose={() => setIsAIBountiesModalOpen(false)}
+      />
     </div>
   );
 }
