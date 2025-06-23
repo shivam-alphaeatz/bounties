@@ -265,6 +265,13 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
   };
 
   const processBountyAction = async (bucketId: number, bounty: string, action: 'accepted' | 'rejected', reason: string) => {
+    // Check if this bounty has already been acted upon to prevent duplicates
+    const existingAction = bountyActions.find(a => a.bounty === bounty);
+    if (existingAction) {
+      console.log(`Bounty "${bounty}" has already been ${existingAction.action}. Skipping duplicate action.`);
+      return;
+    }
+
     const newAction: BountyAction = {
       bucket_id: bucketId,
       bounty,
@@ -404,6 +411,13 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent multiple submissions
+    if (submitting) {
+      console.log('Submission already in progress. Ignoring duplicate click.');
+      return;
+    }
+    
     setSubmitting(true);
     
     const approvedActions = bountyActions.filter(action => action.action === 'accepted');
@@ -416,6 +430,8 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
     }
 
     try {
+      console.log(`Submitting ${approvedActions.length} approved and ${rejectedActions.length} rejected bounties`);
+      
       // Step 1: Save all actions (approved and rejected) to the history table.
       // This ensures rejected bounties are saved even if approved ones fail later.
       if (bountyActions.length > 0) {
@@ -440,6 +456,8 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
             };
           });
   
+          console.log('Inserting bounties:', newBountiesToInsert.map(b => b.bounty));
+  
           const { data: insertedBounties, error: bountiesError } = await supabase
             .from('bounties')
             .insert(newBountiesToInsert)
@@ -447,6 +465,8 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
   
           if (bountiesError) throw bountiesError;
           if (!insertedBounties) throw new Error("Failed to get IDs from inserted bounties.");
+  
+          console.log('Successfully inserted bounties:', insertedBounties);
   
           const bucketWeights = insertedBounties.map(insertedBounty => {
             const originalAction = approvedActions.find(a => a.bounty === insertedBounty.bounty); // Match on 'bounty' field
@@ -459,6 +479,8 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
               weight: 1 // Default weight
             };
           });
+  
+          console.log('Inserting bucket weights:', bucketWeights);
   
           const { error: weightsError } = await supabase
             .from('bountyBucketWeight')
@@ -528,15 +550,40 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
                 </div>
                 <div className="bounties-list-items">
                     {availableBounties.length > 0 ? (
-                        availableBounties.map((bountyName) => (
-                            <div key={bountyName} className="bounty-item">
-                                <p className="bounty-text">{bountyName}</p>
-                                <div className="bounty-actions">
-                                    <button className="approve-button" onClick={() => handleBountyAction(bucket.bucket_id, bountyName, 'accepted')}>Approve</button>
-                                    <button className="reject-button" onClick={() => handleBountyAction(bucket.bucket_id, bountyName, 'rejected')}>Reject</button>
+                        availableBounties.map((bountyName) => {
+                            const existingAction = bountyActions.find(a => a.bounty === bountyName);
+                            const isDisabled = !!existingAction;
+                            
+                            return (
+                                <div key={bountyName} className={`bounty-item ${isDisabled ? 'disabled' : ''}`}>
+                                    <p className="bounty-text">{bountyName}</p>
+                                    {existingAction ? (
+                                        <div className="bounty-status">
+                                            <span className={`status-badge ${existingAction.action === 'accepted' ? 'approved' : 'rejected'}`}>
+                                                {existingAction.action === 'accepted' ? '✓ Approved' : '✗ Rejected'}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <div className="bounty-actions">
+                                            <button 
+                                                className="approve-button" 
+                                                onClick={() => handleBountyAction(bucket.bucket_id, bountyName, 'accepted')}
+                                                disabled={isDisabled}
+                                            >
+                                                Approve
+                                            </button>
+                                            <button 
+                                                className="reject-button" 
+                                                onClick={() => handleBountyAction(bucket.bucket_id, bountyName, 'rejected')}
+                                                disabled={isDisabled}
+                                            >
+                                                Reject
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                        ))
+                            );
+                        })
                     ) : (
                         <div className="no-bounties-message">
                             <p>No available bounties in this category</p>
