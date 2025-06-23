@@ -4,6 +4,7 @@ import BountiesTable from './components/BountiesTable';
 import BountyBucketWeightTable from './components/BountyBucketWeightTable';
 import RawBountyBucketWeightTable from './components/RawBountyBucketWeightTable';
 import AIBountiesModal from './components/AIBountiesModal';
+import EnvironmentDebug from './components/EnvironmentDebug';
 
 function App() {
   const [activeTab, setActiveTab] = useState<'bounties' | 'categories' | 'raw'>('bounties');
@@ -20,6 +21,10 @@ function App() {
           AI Bounties
         </button>
       </header>
+      
+      {/* Temporary Environment Debug Component */}
+      <EnvironmentDebug />
+      
       <main className="App-main">
         <div className="tabs">
           <button 

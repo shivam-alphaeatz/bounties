@@ -111,15 +111,29 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
     setError(null);
     
     const requestBody = { bucket_id: bucketId || 0 };
-    const authToken = process.env.REACT_APP_SUPABASE_ANON_KEY;
+    
+    // Try environment variable first, fallback to hardcoded token
+    const authToken = process.env.REACT_APP_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53Zmhxcm1kam1qb3BieHVseWh1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjI2NzkwMywiZXhwIjoyMDYxODQzOTAzfQ.QjKCJFJaJM1E3PKa22wJ2yvptXBLmYw-u4QF7fS0sfs';
     const edgeFunctionUrl = process.env.REACT_APP_SUPABASE_EDGE_FUNCTION_URL || 'https://nwfhqrmdjmjopbxulyhu.supabase.co/functions/v1/bountygen';
+    
+    // Debug environment variables
+    console.log('Environment Variables Debug:', {
+      hasSupabaseUrl: !!process.env.REACT_APP_SUPABASE_URL,
+      hasAnonKey: !!process.env.REACT_APP_SUPABASE_ANON_KEY,
+      hasEdgeFunctionUrl: !!process.env.REACT_APP_SUPABASE_EDGE_FUNCTION_URL,
+      anonKeyLength: process.env.REACT_APP_SUPABASE_ANON_KEY?.length,
+      anonKeyStart: process.env.REACT_APP_SUPABASE_ANON_KEY?.substring(0, 20) + '...',
+      edgeFunctionUrl: edgeFunctionUrl,
+      usingFallbackToken: !process.env.REACT_APP_SUPABASE_ANON_KEY
+    });
     
     console.log('Fetching bounties with:', {
       url: edgeFunctionUrl,
       method: 'POST',
       body: requestBody,
       hasAuthToken: !!authToken,
-      authTokenLength: authToken?.length
+      authTokenLength: authToken?.length,
+      authTokenStart: authToken?.substring(0, 20) + '...'
     });
     
     try {
@@ -142,6 +156,18 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Response error:', errorText);
+        
+        // Special handling for 401 errors
+        if (response.status === 401) {
+          console.error('401 Unauthorized - JWT Token Issues:');
+          console.error('- Auth token exists:', !!authToken);
+          console.error('- Auth token length:', authToken?.length);
+          console.error('- Environment variable loaded:', !!process.env.REACT_APP_SUPABASE_ANON_KEY);
+          console.error('- Using fallback token:', !process.env.REACT_APP_SUPABASE_ANON_KEY);
+          
+          throw new Error(`Authentication failed (401): ${errorText}\n\nPossible causes:\n- Environment variable REACT_APP_SUPABASE_ANON_KEY not set in Vercel\n- Invalid or expired JWT token\n- Wrong token type (should be anon key, not service role key)\n- Using fallback token: ${!process.env.REACT_APP_SUPABASE_ANON_KEY}`);
+        }
+        
         throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
 
@@ -159,6 +185,8 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
           errorMessage = `Network Error: ${err.message}\n\nThis could be:\n- CORS issue\n- Edge Function not responding\n- Network connectivity problem\n- Invalid URL`;
         } else if (err.message.includes('fetch')) {
           errorMessage = `Fetch Error: ${err.message}`;
+        } else if (err.message.includes('401')) {
+          errorMessage = err.message;
         } else {
           errorMessage = `Error: ${err.message}`;
         }
@@ -174,10 +202,12 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
 
   // New function for category-specific refresh
   const fetchBountiesForCategory = async (bucketId: number) => {
-    const authToken = process.env.REACT_APP_SUPABASE_ANON_KEY;
+    // Try environment variable first, fallback to hardcoded token
+    const authToken = process.env.REACT_APP_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53Zmhxcm1kam1qb3BieHVseWh1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjI2NzkwMywiZXhwIjoyMDYxODQzOTAzfQ.QjKCJFJaJM1E3PKa22wJ2yvptXBLmYw-u4QF7fS0sfs';
     const edgeFunctionUrl = process.env.REACT_APP_SUPABASE_EDGE_FUNCTION_URL || 'https://nwfhqrmdjmjopbxulyhu.supabase.co/functions/v1/bountygen';
     
     console.log(`Fetching bounties for category ${bucketId} (${bucketMap[bucketId]})`);
+    console.log(`Using fallback token: ${!process.env.REACT_APP_SUPABASE_ANON_KEY}`);
     
     try {
       const response = await fetch(edgeFunctionUrl, {
