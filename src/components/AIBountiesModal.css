@@ -469,6 +469,16 @@
   gap: 16px;
 }
 
+.submit-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.submit-actions button {
+  width: 100%;
+}
+
 .approved-count {
   font-size: 1.1rem;
   font-weight: 600;
@@ -491,6 +501,24 @@
 .submit-button:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+}
+
+.clear-button {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(239, 68, 68, 0.2);
+}
+
+.clear-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(239, 68, 68, 0.3);
 }
 
 .submit-form {
@@ -614,8 +642,8 @@
 }
 
 .bounty-submit-settings {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
 }
 
@@ -640,6 +668,44 @@
   background: white;
 }
 
+.setting-group input[type="datetime-local"] {
+  font-family: inherit;
+  min-height: 40px;
+}
+
+.setting-group input[type="date"] {
+  font-family: inherit;
+  min-height: 40px;
+}
+
+.expiry-display {
+  margin-bottom: 8px;
+}
+
+.date-display {
+  margin-bottom: 8px;
+}
+
+.expiry-text {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  padding: 6px 10px;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.date-text {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  padding: 6px 10px;
+  border-radius: 6px;
+  display: inline-block;
+}
+
 .setting-group input:focus {
   outline: none;
   border-color: #667eea;
@@ -652,6 +718,7 @@
   gap: 12px;
   padding-top: 20px;
   border-top: 1px solid #e5e7eb;
+  flex-direction: column;
 }
 
 .cancel-button {
@@ -834,8 +901,13 @@
     gap: 12px;
   }
 
-  .bounty-submit-settings {
-    grid-template-columns: 1fr;
+  .submit-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .submit-actions button {
+    width: 100%;
   }
 
   .submit-form-actions {

@@ -10,7 +10,7 @@ If you're getting "Failed to save to database. Actions are saved locally." error
 4. Click the "Test DB" button
 5. Check the console output for detailed error messages
 
-## Step 2: Create the Database Table
+## Step 2: Create the Database Tables
 
 ### Option A: Using Supabase Dashboard (Recommended)
 
@@ -32,6 +32,27 @@ CREATE TABLE IF NOT EXISTS bounty_actions (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Create the main bounties table
+CREATE TABLE IF NOT EXISTS bounties (
+    id SERIAL PRIMARY KEY,
+    date DATE NOT NULL,
+    bounty TEXT NOT NULL,
+    type TEXT NOT NULL,
+    lifespan INTEGER,
+    target_value INTEGER DEFAULT 1,
+    expiry TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create the bountyBucketWeight table for category weights
+CREATE TABLE IF NOT EXISTS bountyBucketWeight (
+    id SERIAL PRIMARY KEY,
+    bountyId INTEGER NOT NULL REFERENCES bounties(id) ON DELETE CASCADE,
+    bucketId INTEGER NOT NULL,
+    weight INTEGER DEFAULT 1,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_bounty_actions_bucket_id ON bounty_actions(bucket_id);
 CREATE INDEX IF NOT EXISTS idx_bounty_actions_action ON bounty_actions(action);
@@ -39,20 +60,24 @@ CREATE INDEX IF NOT EXISTS idx_bounty_actions_timestamp ON bounty_actions(timest
 CREATE INDEX IF NOT EXISTS idx_bounty_actions_category ON bounty_actions(category);
 CREATE INDEX IF NOT EXISTS idx_bounty_actions_rejection_reason ON bounty_actions(rejection_reason);
 
--- Add comments to the table
-COMMENT ON TABLE bounty_actions IS 'Stores user actions (approve/reject) on AI-generated bounties';
-COMMENT ON COLUMN bounty_actions.bucket_id IS 'The bucket/category ID from the AI response';
-COMMENT ON COLUMN bounty_actions.bounty IS 'The bounty text that was approved or rejected';
-COMMENT ON COLUMN bounty_actions.action IS 'Whether the bounty was approved or rejected';
-COMMENT ON COLUMN bounty_actions.category IS 'The human-readable category name';
-COMMENT ON COLUMN bounty_actions.timestamp IS 'When the action was taken';
-COMMENT ON COLUMN bounty_actions.rejection_reason IS 'Optional reason or notes for rejected bounties';
+CREATE INDEX IF NOT EXISTS idx_bounties_date ON bounties(date);
+CREATE INDEX IF NOT EXISTS idx_bounties_type ON bounties(type);
+CREATE INDEX IF NOT EXISTS idx_bountyBucketWeight_bountyId ON bountyBucketWeight(bountyId);
+CREATE INDEX IF NOT EXISTS idx_bountyBucketWeight_bucketId ON bountyBucketWeight(bucketId);
 
 -- Enable Row Level Security (RLS) for better security
 ALTER TABLE bounty_actions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bounties ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bountyBucketWeight ENABLE ROW LEVEL SECURITY;
 
--- Create a policy that allows all operations (you can modify this based on your security needs)
+-- Create policies that allow all operations (you can modify this based on your security needs)
 CREATE POLICY "Allow all operations on bounty_actions" ON bounty_actions
+    FOR ALL USING (true);
+
+CREATE POLICY "Allow all operations on bounties" ON bounties
+    FOR ALL USING (true);
+
+CREATE POLICY "Allow all operations on bountyBucketWeight" ON bountyBucketWeight
     FOR ALL USING (true);
 ```
 
@@ -66,8 +91,12 @@ CREATE POLICY "Allow all operations on bounty_actions" ON bounty_actions
 ## Step 3: Verify Table Creation
 
 1. In Supabase Dashboard, go to "Table Editor"
-2. You should see a `bounty_actions` table
-3. The table should have these columns:
+2. You should see these tables:
+   - `bounty_actions` - Stores AI bounty approval/rejection actions
+   - `bounties` - Main bounties table
+   - `bountyBucketWeight` - Stores category weights for bounties
+
+### bounty_actions table columns:
    - `id` (SERIAL PRIMARY KEY)
    - `bucket_id` (INTEGER)
    - `bounty` (TEXT)
@@ -75,6 +104,23 @@ CREATE POLICY "Allow all operations on bounty_actions" ON bounty_actions
    - `timestamp` (TIMESTAMP WITH TIME ZONE)
    - `category` (TEXT)
    - `rejection_reason` (TEXT)
+   - `created_at` (TIMESTAMP WITH TIME ZONE)
+
+### bounties table columns:
+   - `id` (SERIAL PRIMARY KEY)
+   - `date` (DATE)
+   - `bounty` (TEXT)
+   - `type` (TEXT)
+   - `lifespan` (INTEGER)
+   - `target_value` (INTEGER)
+   - `expiry` (TIMESTAMP WITH TIME ZONE)
+   - `created_at` (TIMESTAMP WITH TIME ZONE)
+
+### bountyBucketWeight table columns:
+   - `id` (SERIAL PRIMARY KEY)
+   - `bountyId` (INTEGER - Foreign Key to bounties.id)
+   - `bucketId` (INTEGER)
+   - `weight` (INTEGER)
    - `created_at` (TIMESTAMP WITH TIME ZONE)
 
 ## Step 4: Test the Connection
@@ -91,13 +137,16 @@ CREATE POLICY "Allow all operations on bounty_actions" ON bounty_actions
 ### Issue 1: "relation 'bounty_actions' does not exist"
 **Solution**: The table hasn't been created. Follow Step 2 to create it.
 
-### Issue 2: "permission denied"
+### Issue 2: "relation 'bounties' does not exist"
+**Solution**: The main bounties table hasn't been created. Follow Step 2 to create all tables.
+
+### Issue 3: "permission denied"
 **Solution**: Check your Supabase API key and make sure it has the correct permissions.
 
-### Issue 3: "network error"
+### Issue 4: "network error"
 **Solution**: Check your internet connection and Supabase service status.
 
-### Issue 4: "invalid input syntax"
+### Issue 5: "invalid input syntax"
 **Solution**: The data format might be incorrect. Check the console logs for the exact error.
 
 ## Troubleshooting
@@ -123,6 +172,8 @@ If you get RLS errors, you may need to disable RLS temporarily:
 
 ```sql
 ALTER TABLE bounty_actions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE bounties DISABLE ROW LEVEL SECURITY;
+ALTER TABLE bountyBucketWeight DISABLE ROW LEVEL SECURITY;
 ```
 
 ## Still Having Issues?
