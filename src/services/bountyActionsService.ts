@@ -7,6 +7,8 @@ export interface BountyAction {
   timestamp: Date;
   category?: string;
   rejection_reason?: string;
+  bounty_type?: string;
+  submitted?: boolean;
 }
 
 export class BountyActionsService {
@@ -21,6 +23,7 @@ export class BountyActionsService {
           action: action.action,
           timestamp: action.timestamp.toISOString(),
           notes: action.rejection_reason,
+          type: action.bounty_type || 'daily',
         });
 
       if (error) {
@@ -42,6 +45,7 @@ export class BountyActionsService {
         action: action.action,
         timestamp: action.timestamp.toISOString(),
         notes: action.rejection_reason,
+        type: action.bounty_type || 'daily',
       }));
 
       const { error } = await supabase
@@ -77,6 +81,7 @@ export class BountyActionsService {
         timestamp: new Date(item.timestamp),
         category: item.category,
         rejection_reason: item.notes,
+        bounty_type: item.type || 'daily',
       })) || [];
     } catch (error) {
       console.error('Failed to fetch bounty actions:', error);
@@ -86,9 +91,9 @@ export class BountyActionsService {
 
   static exportToCSV(actions: BountyAction[]): void {
     const csvContent = [
-      'Bucket ID,Category,Bounty,Action,Timestamp,Notes',
+      'Bucket ID,Category,Bounty,Action,Timestamp,Notes,Bounty Type',
       ...actions.map(action => 
-        `${action.bucket_id},"${action.category || 'Unknown'}","${action.bounty}","${action.action}","${action.timestamp.toISOString()}","${action.rejection_reason || ''}"`
+        `${action.bucket_id},"${action.category || 'Unknown'}","${action.bounty}","${action.action}","${action.timestamp.toISOString()}","${action.rejection_reason || ''}","${action.bounty_type || 'daily'}"`
       )
     ].join('\n');
 

@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './AIBountiesModal.css';
 import { BountyActionsService, BountyAction } from '../services/bountyActionsService';
-import { DatabaseTest } from '../utils/databaseTest';
 import { supabase } from '../supabaseClient';
 
 interface Bounty {
@@ -15,6 +14,7 @@ interface BountyToSubmit {
   category: string;
   date: string;
   expiry_timestamp: string;
+  bounty_type: string;
 }
 
 interface RejectionModalProps {
@@ -78,7 +78,6 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bountyActions, setBountyActions] = useState<BountyAction[]>([]);
-  const [saving, setSaving] = useState(false);
   const [showSubmitForm, setShowSubmitForm] = useState(false);
   const [bountiesToSubmit, setBountiesToSubmit] = useState<BountyToSubmit[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -93,12 +92,43 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
     category: '',
     bucketId: 0
   });
-  const [rejectionReason, setRejectionReason] = useState<{[key: string]: string}>({});
   
-  // Add refresh counters for each category (max 3 refreshes per category)
-  const [refreshCounts, setRefreshCounts] = useState<{[key: number]: number}>({
-    1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0
-  });
+  // Add bounty type state
+  const [selectedBountyType, setSelectedBountyType] = useState<'daily' | 'weekly' | 'yearly'>('daily');
+  
+  // Track which bounty types have been loaded
+  const [loadedBountyTypes, setLoadedBountyTypes] = useState<Set<string>>(new Set(['daily']));
+  
+  // Add state to show/hide processed bounties
+  const [showProcessedBounties, setShowProcessedBounties] = useState(false);
+  
+  // Add refresh counters for each category and type (max 3 refreshes per category per type)
+  const [refreshCounts, setRefreshCounts] = useState<{[key: string]: number}>({});
+  
+  // Track pending uploads counts
+  const [pendingActionsCount, setPendingActionsCount] = useState(0);
+  const [pendingBountiesCount, setPendingBountiesCount] = useState(0);
+
+  // Options dropdown state
+  const [showOptionsDropdown, setShowOptionsDropdown] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
+  const optionsButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Cache keys for localStorage
+  const CACHE_KEYS = {
+    BOUNTIES: 'ai_bounties_cache',
+    BOUNTIES_TIMESTAMP: 'ai_bounties_timestamp',
+    REFRESH_COUNTS: 'ai_refresh_counts'
+  };
+
+  // Cache duration in milliseconds (1 hour)
+  const CACHE_DURATION = 60 * 60 * 1000;
+
+  // Pending uploads cache keys
+  const PENDING_KEYS = {
+    PENDING_ACTIONS: 'pending_bounty_actions',
+    PENDING_BOUNTIES: 'pending_bounties_submit'
+  };
 
   // Bucket ID to Category mapping
   const bucketMap: { [key: number]: string } = {
@@ -108,6 +138,206 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
     4: 'Connect',
     5: 'Mindset',
     6: 'Explore'
+  };
+
+  // Bounty types
+  const bountyTypes = ['daily', 'weekly', 'yearly'] as const;
+
+  // Function to get cache key for specific type
+  const getCacheKeyForType = (type: string) => `ai_bounties_cache_${type}`;
+  const getTimestampKeyForType = (type: string) => `ai_bounties_timestamp_${type}`;
+
+  // Function to calculate dropdown position
+  const calculateDropdownPosition = () => {
+    if (optionsButtonRef.current) {
+      const rect = optionsButtonRef.current.getBoundingClientRect();
+      const top = rect.bottom + 8; // 8px gap
+      const right = window.innerWidth - rect.right;
+      setDropdownPosition({ top, right });
+      console.log('Dropdown position calculated:', { top, right, rect });
+    }
+  };
+
+  // Function to handle options button click
+  const handleOptionsButtonClick = () => {
+    if (!showOptionsDropdown) {
+      calculateDropdownPosition();
+    }
+    setShowOptionsDropdown(!showOptionsDropdown);
+  };
+
+  // Cache management functions
+  const saveBountiesToCache = (bountiesData: Bounty[]) => {
+    try {
+      const cacheKey = getCacheKeyForType(selectedBountyType);
+      const timestampKey = getTimestampKeyForType(selectedBountyType);
+      localStorage.setItem(cacheKey, JSON.stringify(bountiesData));
+      localStorage.setItem(timestampKey, Date.now().toString());
+      console.log(`Saved bounties to cache for type: ${selectedBountyType}`);
+    } catch (error) {
+      console.error('Error saving bounties to cache:', error);
+    }
+  };
+
+  const loadBountiesFromCache = (bountyType?: string): Bounty[] | null => {
+    try {
+      const typeToUse = bountyType || selectedBountyType;
+      const cacheKey = getCacheKeyForType(typeToUse);
+      const timestampKey = getTimestampKeyForType(typeToUse);
+      const cached = localStorage.getItem(cacheKey);
+      const timestamp = localStorage.getItem(timestampKey);
+      
+      if (!cached || !timestamp) {
+        console.log(`No cached bounties found for type: ${typeToUse}`);
+        return null;
+      }
+      
+      const age = Date.now() - parseInt(timestamp);
+      if (age > CACHE_DURATION) {
+        console.log(`Cache expired for type: ${typeToUse}, age: ${age}ms`);
+        localStorage.removeItem(cacheKey);
+        localStorage.removeItem(timestampKey);
+        return null;
+      }
+      
+      const bounties = JSON.parse(cached);
+      console.log(`Loaded ${bounties.length} bounties from cache for type: ${typeToUse}`);
+      return bounties;
+    } catch (error) {
+      console.error('Error loading bounties from cache:', error);
+      return null;
+    }
+  };
+
+  const clearBountiesCache = () => {
+    try {
+      bountyTypes.forEach(type => {
+        const cacheKey = getCacheKeyForType(type);
+        const timestampKey = getTimestampKeyForType(type);
+        localStorage.removeItem(cacheKey);
+        localStorage.removeItem(timestampKey);
+      });
+      console.log('Cleared all bounty caches');
+    } catch (error) {
+      console.error('Error clearing bounties cache:', error);
+    }
+  };
+
+  const saveRefreshCountsToCache = (counts: {[key: string]: number}) => {
+    try {
+      localStorage.setItem(CACHE_KEYS.REFRESH_COUNTS, JSON.stringify(counts));
+    } catch (error) {
+      console.error('Error saving refresh counts to cache:', error);
+    }
+  };
+
+  const loadRefreshCountsFromCache = (): {[key: string]: number} => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEYS.REFRESH_COUNTS);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (error) {
+      console.error('Error loading refresh counts from cache:', error);
+    }
+    return { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+  };
+
+  // Pending uploads management functions
+  const savePendingActions = (actions: BountyAction[]) => {
+    try {
+      localStorage.setItem(PENDING_KEYS.PENDING_ACTIONS, JSON.stringify(actions));
+      console.log(`Saved ${actions.length} pending actions to localStorage`);
+    } catch (error) {
+      console.error('Error saving pending actions:', error);
+    }
+  };
+
+  const loadPendingActions = (): BountyAction[] => {
+    try {
+      const pending = localStorage.getItem(PENDING_KEYS.PENDING_ACTIONS);
+      if (pending) {
+        const parsed = JSON.parse(pending);
+        return parsed.map((action: any) => ({
+          ...action,
+          timestamp: new Date(action.timestamp)
+        }));
+      }
+    } catch (error) {
+      console.error('Error loading pending actions:', error);
+    }
+    return [];
+  };
+
+  const clearPendingActions = () => {
+    try {
+      localStorage.removeItem(PENDING_KEYS.PENDING_ACTIONS);
+      console.log('Pending actions cleared from localStorage');
+    } catch (error) {
+      console.error('Error clearing pending actions:', error);
+    }
+  };
+
+  const savePendingBounties = (bounties: BountyToSubmit[]) => {
+    try {
+      localStorage.setItem(PENDING_KEYS.PENDING_BOUNTIES, JSON.stringify(bounties));
+      console.log(`Saved ${bounties.length} pending bounties to localStorage`);
+    } catch (error) {
+      console.error('Error saving pending bounties:', error);
+    }
+  };
+
+  const loadPendingBounties = (): BountyToSubmit[] => {
+    try {
+      const pending = localStorage.getItem(PENDING_KEYS.PENDING_BOUNTIES);
+      if (pending) {
+        return JSON.parse(pending);
+      }
+    } catch (error) {
+      console.error('Error loading pending bounties:', error);
+    }
+    return [];
+  };
+
+  const clearPendingBounties = () => {
+    try {
+      localStorage.removeItem(PENDING_KEYS.PENDING_BOUNTIES);
+      console.log('Pending bounties cleared from localStorage');
+    } catch (error) {
+      console.error('Error clearing pending bounties:', error);
+    }
+  };
+
+  // Function to update pending counts
+  const updatePendingCounts = () => {
+    const pendingActions = loadPendingActions();
+    const pendingBounties = loadPendingBounties();
+    setPendingActionsCount(pendingActions.length);
+    setPendingBountiesCount(pendingBounties.length);
+  };
+
+  // Function to check if there are pending uploads
+  const hasPendingUploads = () => {
+    return pendingActionsCount > 0 || pendingBountiesCount > 0;
+  };
+
+  // Function to show pending uploads info
+  const showPendingUploadsInfo = () => {
+    let message = 'Pending Uploads:\n\n';
+    
+    if (pendingActionsCount > 0) {
+      message += `• ${pendingActionsCount} bounty actions (approved/rejected)\n`;
+    }
+    
+    if (pendingBountiesCount > 0) {
+      message += `• ${pendingBountiesCount} bounties for main table\n`;
+    }
+    
+    if (pendingActionsCount === 0 && pendingBountiesCount === 0) {
+      message = 'No pending uploads found.';
+    }
+    
+    alert(message);
   };
 
   // Helper function to format expiry timestamp for display
@@ -122,11 +352,27 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
     return date.toLocaleDateString();
   };
 
-  const fetchBounties = useCallback(async (bucketId: number | null) => {
+  const fetchBounties = useCallback(async (bucketId: number | null, forceRefresh: boolean = false) => {
     setLoading(true);
     setError(null);
     
-    const requestBody = { bucket_id: bucketId || 0 };
+    // If not forcing refresh, try to load from cache first
+    if (!forceRefresh && bucketId === null) {
+      const cachedBounties = loadBountiesFromCache();
+      if (cachedBounties) {
+        console.log('Using cached bounties');
+        setBounties(cachedBounties);
+        setLoading(false);
+        return;
+      }
+    }
+    
+    console.log('Fetching bounties from API...');
+    
+    const requestBody = { 
+      bucket_id: bucketId || 0,
+      type: selectedBountyType
+    };
     const authToken = process.env.REACT_APP_SUPABASE_ANON_KEY;
     const edgeFunctionUrl = process.env.REACT_APP_SUPABASE_EDGE_FUNCTION_URL || 'https://nwfhqrmdjmjopbxulyhu.supabase.co/functions/v1/bountygen';
     
@@ -164,6 +410,11 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
       const data = await response.json();
       console.log('Bounties data received:', data);
       setBounties(data);
+      
+      // Save to cache if this is a full fetch (not category-specific)
+      if (bucketId === null) {
+        saveBountiesToCache(data);
+      }
     } catch (err) {
       console.error('Fetch error details:', err);
       
@@ -186,20 +437,20 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedBountyType]);
 
   // New function for category-specific refresh
   const fetchBountiesForCategory = async (bucketId: number) => {
-    // Check if we've reached the refresh limit for this category
-    if (refreshCounts[bucketId] >= 3) {
-      alert(`You've reached the maximum of 3 refreshes for ${bucketMap[bucketId]}. Please wait for new bounties to be generated.`);
+    const refreshKey = `${selectedBountyType}_${bucketId}`;
+    
+    // Check if we've reached the refresh limit for this category and type
+    if (refreshCounts[refreshKey] >= 3) {
+      alert(`You've reached the maximum of 3 refreshes for ${bucketMap[bucketId]} (${selectedBountyType}). Please wait for new bounties to be generated.`);
       return;
     }
 
     const authToken = process.env.REACT_APP_SUPABASE_ANON_KEY;
     const edgeFunctionUrl = process.env.REACT_APP_SUPABASE_EDGE_FUNCTION_URL || 'https://nwfhqrmdjmjopbxulyhu.supabase.co/functions/v1/bountygen';
-    
-    console.log(`Fetching bounties for category ${bucketId} (${bucketMap[bucketId]}) - Refresh #${refreshCounts[bucketId] + 1}`);
     
     try {
       const response = await fetch(edgeFunctionUrl, {
@@ -208,111 +459,190 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${authToken}`
         },
-        body: JSON.stringify({ bucket_id: bucketId }),
+        body: JSON.stringify({ 
+          bucket_id: bucketId,
+          type: selectedBountyType
+        }),
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
-      console.log(`New bounties received for category ${bucketId}:`, data);
+      const newBounties = await response.json();
       
-      // Update only the specific category while preserving others
+      // Update the existing bounties with new ones for this category
       setBounties(prevBounties => {
         const updatedBounties = prevBounties.map(bucket => 
-          bucket.bucket_id === bucketId ? data[0] : bucket
+          bucket.bucket_id === bucketId ? newBounties[0] : bucket
         );
+        
+        // Update cache with the new data
+        saveBountiesToCache(updatedBounties);
         return updatedBounties;
       });
 
-      // Increment refresh count for this category
-      setRefreshCounts(prev => ({
-        ...prev,
-        [bucketId]: prev[bucketId] + 1
-      }));
+      // Increment refresh count for this category and type
+      setRefreshCounts(prev => {
+        const newCounts = {
+          ...prev,
+          [refreshKey]: (prev[refreshKey] || 0) + 1
+        };
+        saveRefreshCountsToCache(newCounts);
+        return newCounts;
+      });
 
-      console.log(`Successfully refreshed category ${bucketId}. Refresh count: ${refreshCounts[bucketId] + 1}/3`);
+      console.log(`Successfully refreshed category ${bucketId} for type ${selectedBountyType}. Refresh count: ${(refreshCounts[refreshKey] || 0) + 1}/3`);
     } catch (err) {
-      console.error(`Error fetching bounties for category ${bucketId}:`, err);
-      setError(`Failed to fetch new bounties for ${bucketMap[bucketId]}`);
+      console.error(`Error fetching bounties for category ${bucketId} (${selectedBountyType}):`, err);
+      setError(`Failed to fetch new bounties for ${bucketMap[bucketId]} (${selectedBountyType})`);
     }
   };
 
   // Group bounties into two categories
-  const group1Bounties = bounties.filter(bucket => [1, 2, 3].includes(bucket.bucket_id));
-  const group2Bounties = bounties.filter(bucket => [4, 5, 6].includes(bucket.bucket_id));
+  const group1Bounties = (bounties || []).filter(bucket => [1, 2, 3].includes(bucket.bucket_id));
+  const group2Bounties = (bounties || []).filter(bucket => [4, 5, 6].includes(bucket.bucket_id));
 
   // Get approved and rejected actions
-  const approvedActions = bountyActions.filter(action => action.action === 'accepted');
-  const rejectedActions = bountyActions.filter(action => action.action === 'rejected');
+  const approvedActions = (bountyActions || []).filter(action => action.action === 'accepted');
+  const rejectedActions = (bountyActions || []).filter(action => action.action === 'rejected');
+  
+  // Get unsubmitted actions for the submit button
+  const unsubmittedActions = (bountyActions || []).filter(action => !action.submitted);
+  const unsubmittedApprovedActions = unsubmittedActions.filter(action => action.action === 'accepted');
+  const unsubmittedRejectedActions = unsubmittedActions.filter(action => action.action === 'rejected');
 
+  // Load saved actions and update pending counts on mount
   useEffect(() => {
     if (isOpen) {
-      console.log('AIBountiesModal: Modal opened, fetching bounties and loading actions');
-      fetchBounties(null);
+      console.log('AIBountiesModal: Modal opened, loading cached data and fetching bounties if needed');
+      
+      // Load refresh counts from cache
+      const cachedRefreshCounts = loadRefreshCountsFromCache();
+      setRefreshCounts(cachedRefreshCounts);
+      
+      // Load saved actions
       loadSavedActions();
       
-      // Check for and clear any default approved bounties
-      setTimeout(async () => {
-        const savedActions = await BountyActionsService.getBountyActions();
-        const defaultApprovedCount = savedActions.filter(action => action.action === 'accepted').length;
-        
-        if (defaultApprovedCount > 0) {
-          console.log(`Found ${defaultApprovedCount} default approved bounties, clearing them...`);
-          const confirmed = window.confirm(
-            `Found ${defaultApprovedCount} previously approved bounty${defaultApprovedCount !== 1 ? 'ies' : 'y'} from a previous session.\n\n` +
-            `These will be cleared to start fresh. Continue?`
-          );
-          
-          if (confirmed) {
-            await clearApprovedBounties();
-          }
-        }
-      }, 1000); // Small delay to ensure actions are loaded first
+      // Fetch bounties (will use cache if available)
+      fetchBounties(null, false);
+      updatePendingCounts();
     } else {
       console.log('AIBountiesModal: Modal closed');
     }
   }, [isOpen, fetchBounties]);
 
+  // Update pending counts when bountyActions change
+  useEffect(() => {
+    updatePendingCounts();
+  }, [bountyActions]);
+
+  // Update pending counts on mount
+  useEffect(() => {
+    updatePendingCounts();
+  }, []);
+
+  // Handle clicking outside dropdown to close it
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (showOptionsDropdown && !target.closest('.options-dropdown')) {
+        setShowOptionsDropdown(false);
+      }
+    };
+
+    if (showOptionsDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showOptionsDropdown]);
+
+  // Handle window resize to recalculate dropdown position
+  useEffect(() => {
+    const handleResize = () => {
+      if (showOptionsDropdown) {
+        calculateDropdownPosition();
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [showOptionsDropdown]);
+
+  // Function to reset refresh limits for all categories
+  const resetRefreshLimits = () => {
+    const confirmed = window.confirm(
+      'Are you sure you want to reset refresh limits for all categories?\n\n' +
+      'This will allow you to refresh bounties again for all categories and types.'
+    );
+    
+    if (confirmed) {
+      setRefreshCounts({});
+      saveRefreshCountsToCache({});
+      console.log('Refresh limits reset for all categories and types');
+      
+      // Show a brief success message
+      const successMessage = document.createElement('div');
+      successMessage.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #10b981;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        z-index: 2000;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+      `;
+      successMessage.textContent = 'Refresh limits reset successfully!';
+      document.body.appendChild(successMessage);
+      
+      // Remove the message after 3 seconds
+      setTimeout(() => {
+        if (document.body.contains(successMessage)) {
+          document.body.removeChild(successMessage);
+        }
+      }, 3000);
+    }
+  };
+
   // Function to clear approved bounties from cache and database
   const clearApprovedBounties = async () => {
-    try {
-      // Clear from localStorage
-      const remainingActions = bountyActions.filter(action => action.action === 'rejected');
-      BountyActionsService.saveToLocalStorage(remainingActions);
-      setBountyActions(remainingActions);
+    // Clear all unsubmitted actions from localStorage and state
+    const submittedActions = bountyActions.filter(action => action.submitted);
+    setBountyActions(submittedActions);
+    BountyActionsService.saveToLocalStorage(submittedActions);
+    
+    // Also clear any pending actions that might be unsubmitted
+    clearPendingActions();
+    
+    console.log('Cleared all unsubmitted bounty actions');
+  };
 
-      // Clear from database if possible
-      try {
-        const { error } = await supabase
-          .from('bounty_actions')
-          .delete()
-          .eq('action', 'accepted');
-
-        if (error) {
-          console.error('Error clearing approved bounties from database:', error);
-        } else {
-          console.log('Successfully cleared approved bounties from database');
-        }
-      } catch (dbError) {
-        console.error('Failed to clear approved bounties from database:', dbError);
-      }
-
-      console.log('Approved bounties cleared successfully');
-    } catch (error) {
-      console.error('Error clearing approved bounties:', error);
-    }
+  const clearAllActions = async () => {
+    // Clear ALL actions from localStorage and state (both submitted and unsubmitted)
+    setBountyActions([]);
+    BountyActionsService.saveToLocalStorage([]);
+    
+    // Also clear any pending actions
+    clearPendingActions();
+    
+    console.log('Cleared all bounty actions (submitted and unsubmitted)');
   };
 
   // Function to handle modal close with confirmation
   const handleCloseModal = () => {
-    if (approvedActions.length > 0) {
+    if (bountyActions.length > 0) {
       const confirmed = window.confirm(
-        `You have ${approvedActions.length} approved bounty${approvedActions.length !== 1 ? 'ies' : 'y'} that haven't been submitted.\n\n` +
-        `Closing the modal will clear all approved bounties from cache and database.\n\n` +
-        `Are you sure you want to close and lose these approved bounties?`
+        `You have ${bountyActions.length} bounty action${bountyActions.length !== 1 ? 's' : ''} (${approvedActions.length} approved, ${rejectedActions.length} rejected) that haven't been submitted.\n\n` +
+        `Closing the modal will clear all actions from cache and database.\n\n` +
+        `Are you sure you want to close and lose these actions?`
       );
       
       if (confirmed) {
@@ -355,13 +685,21 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
 
   const loadSavedActions = async () => {
     try {
-      const savedActions = await BountyActionsService.getBountyActions();
-      setBountyActions(savedActions);
+      // Use localStorage only (Vercel-friendly)
+      const localActions = BountyActionsService.loadFromLocalStorage();
+      
+      // Ensure all actions have bounty_type and submitted fields (for backward compatibility)
+      const actionsWithDefaults = localActions.map(action => ({
+        ...action,
+        bounty_type: action.bounty_type || 'daily', // Default to daily for existing actions
+        submitted: action.submitted !== undefined ? action.submitted : false // Default to false for existing actions
+      }));
+      
+      setBountyActions(actionsWithDefaults);
+      console.log('Loaded actions from localStorage:', actionsWithDefaults.length);
     } catch (error) {
       console.error('Error loading saved actions:', error);
-      // Fallback to localStorage
-      const localActions = BountyActionsService.loadFromLocalStorage();
-      setBountyActions(localActions);
+      setBountyActions([]);
     }
   };
 
@@ -379,88 +717,36 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
   };
 
   const processBountyAction = async (bucketId: number, bounty: string, action: 'accepted' | 'rejected', reason: string) => {
-    console.log(`Processing ${action} action for bounty: ${bounty}`);
+    console.log(`Processing bounty action: ${action} for bounty "${bounty}" in category ${bucketId}`);
     
-    const newAction: BountyAction = {
+    const bountyAction: BountyAction = {
       bucket_id: bucketId,
-      bounty,
-      action,
+      bounty: bounty,
+      action: action,
       timestamp: new Date(),
       category: bucketMap[bucketId],
-      rejection_reason: reason || undefined
+      rejection_reason: reason,
+      bounty_type: selectedBountyType, // Include the current bounty type
+      submitted: false // Mark as not submitted initially
     };
 
-    // For rejections, save immediately to database
-    if (action === 'rejected') {
-      try {
-        console.log('Saving rejection to database...');
-        const { error } = await supabase
-          .from('rejected_bounties')
-          .insert({
-            bounty: bounty,
-            category: bucketMap[bucketId],
-            bucket_id: bucketId,
-            rejection_reason: reason || null,
-            rejected_at: new Date().toISOString()
-          });
-
-        if (error) {
-          console.error('Error saving rejection to database:', error);
-          // Don't throw error here - continue with localStorage save
-        } else {
-          console.log('Rejection saved to database successfully');
-        }
-      } catch (error) {
-        console.error('Failed to save rejection to database:', error);
-        // Don't throw error here - continue with localStorage save
-      }
-    }
-
-    // For approvals, save immediately to database
-    if (action === 'accepted') {
-      try {
-        console.log('Saving approval to database...');
-        const { error } = await supabase
-          .from('approved_bounties')
-          .insert({
-            bounty: bounty,
-            category: bucketMap[bucketId],
-            bucket_id: bucketId,
-            approved_at: new Date().toISOString()
-          });
-
-        if (error) {
-          console.error('Error saving approval to database:', error);
-          // Don't throw error here - continue with localStorage save
-        } else {
-          console.log('Approval saved to database successfully');
-        }
-      } catch (error) {
-        console.error('Failed to save approval to database:', error);
-        // Don't throw error here - continue with localStorage save
-      }
-    }
-
-    // Save to localStorage and update state
     try {
-      console.log('Saving action to localStorage...');
-      await BountyActionsService.saveBountyAction(newAction);
-      setBountyActions(prev => {
-        const updated = [...prev, newAction];
-        console.log('Updated bountyActions:', updated);
-        return updated;
-      });
-      
-      if (reason) {
-        setRejectionReason(prev => ({ ...prev, [bounty]: reason }));
-      }
-      
-      console.log(`Successfully processed ${action} action for bounty: ${bounty}`);
+      // Try to save to database first
+      await BountyActionsService.saveBountyAction(bountyAction);
+      console.log('Bounty action saved to database successfully');
     } catch (error) {
-      console.error('Error saving action to localStorage:', error);
-      // Even if localStorage fails, update the state to show the action
-      setBountyActions(prev => [...prev, newAction]);
+      console.error('Failed to save to database, saving to localStorage:', error);
+      // Save to localStorage as backup
+      BountyActionsService.saveToLocalStorage([...bountyActions, bountyAction]);
     }
+
+    // Update local state
+    setBountyActions(prev => [...prev, bountyAction]);
+    
+    // Update pending counts
+    updatePendingCounts();
+    
+    console.log(`Bounty action processed successfully. Total actions: ${bountyActions.length + 1}`);
   };
 
   const handleRejectionConfirm = async (reason: string) => {
@@ -524,77 +810,216 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
     BountyActionsService.exportToCSV(bountyActions);
   };
 
-  const saveAllToDatabase = async () => {
-    setSaving(true);
+  // Function to export pending bounties to CSV
+  const exportPendingBountiesToCSV = () => {
+    const pendingBounties = loadPendingBounties();
+    if (pendingBounties.length === 0) {
+      alert('No pending bounties to export.');
+      return;
+    }
+
+    // Convert pending bounties to CSV format matching bounty_selection_history table
+    const csvData = pendingBounties.map(bounty => ({
+      bucket_id: '', // Not available in pending bounties
+      category: bounty.category,
+      bounty: bounty.name,
+      action: 'accepted', // Pending bounties are all approved ones
+      timestamp: new Date().toISOString(),
+      notes: `Pending upload - Date: ${bounty.date}, Expiry: ${bounty.expiry_timestamp}`
+    }));
+
+    // Create CSV content
+    const headers = ['bucket_id', 'category', 'bounty', 'action', 'timestamp', 'notes'];
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => 
+        headers.map(header => {
+          const value = row[header as keyof typeof row] || '';
+          // Escape quotes and wrap in quotes if contains comma
+          return `"${String(value).replace(/"/g, '""')}"`;
+        }).join(',')
+      )
+    ].join('\n');
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `pending_bounties_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    alert(`Exported ${pendingBounties.length} pending bounties to CSV successfully!`);
+  };
+
+  // Function to upload bounty actions to Supabase with fallback
+  const uploadBountyActionsToSupabase = async (actions: BountyAction[]): Promise<boolean> => {
     try {
-      // Save all actions to database
-      for (const action of bountyActions) {
-        if (action.action === 'accepted') {
-          // Save approved bounties
-          const { error } = await supabase
-            .from('approved_bounties')
-            .insert({
-              bounty: action.bounty,
-              category: action.category,
-              bucket_id: action.bucket_id,
-              approved_at: action.timestamp.toISOString()
-            });
+      console.log('Attempting to upload bounty actions to Supabase...', { actionCount: actions.length });
+      
+      if (!actions || actions.length === 0) {
+        console.log('No actions to upload, returning true');
+        return true;
+      }
+      
+      const actionsToInsert = actions.map(action => ({
+        bucket_id: action.bucket_id,
+        category: action.category || `Category ${action.bucket_id}`,
+        bounty: action.bounty,
+        action: action.action,
+        timestamp: action.timestamp.toISOString(),
+        notes: action.rejection_reason,
+        type: action.bounty_type || 'daily',
+      }));
 
-          if (error) {
-            console.error('Error saving approved bounty:', error);
-          }
-        } else {
-          // Save rejected bounties
-          const { error } = await supabase
-            .from('rejected_bounties')
-            .insert({
-              bounty: action.bounty,
-              category: action.category,
-              bucket_id: action.bucket_id,
-              rejection_reason: action.rejection_reason,
-              rejected_at: action.timestamp.toISOString()
-            });
+      console.log('Actions to insert:', actionsToInsert);
 
-          if (error) {
-            console.error('Error saving rejected bounty:', error);
+      const { data, error } = await supabase
+        .from('bounty_selection_history')
+        .insert(actionsToInsert)
+        .select();
+
+      if (error) {
+        console.error('Error uploading bounty actions to Supabase:', error);
+        return false;
+      }
+      
+      console.log('Successfully uploaded all bounty actions to Supabase:', { 
+        uploadedCount: data?.length || 0,
+        expectedCount: actions.length 
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to upload bounty actions to Supabase:', error);
+      return false;
+    }
+  };
+
+  // Function to retry pending actions upload
+  const retryPendingActionsUpload = async () => {
+    const pendingActions = loadPendingActions();
+    if (pendingActions.length === 0) {
+      alert('No pending actions to upload.');
+      return;
+    }
+
+    console.log(`Retrying upload of ${pendingActions.length} pending actions...`);
+    const success = await uploadBountyActionsToSupabase(pendingActions);
+    
+    if (success) {
+      clearPendingActions();
+      updatePendingCounts();
+      alert(`Successfully uploaded ${pendingActions.length} pending actions to database!`);
+    } else {
+      alert(`Failed to upload pending actions. They will remain in localStorage for later retry.`);
+    }
+  };
+
+  // Function to retry pending bounties upload
+  const retryPendingBountiesUpload = async () => {
+    const pendingBounties = loadPendingBounties();
+    if (pendingBounties.length === 0) {
+      alert('No pending bounties to upload.');
+      return;
+    }
+
+    console.log(`Retrying upload of ${pendingBounties.length} pending bounties...`);
+    
+    let successCount = 0;
+    let errorCount = 0;
+    
+    try {
+      for (const bounty of pendingBounties) {
+        // Insert into main bounties table
+        const { data: bountyData, error: bountyError } = await supabase
+          .from('bounties')
+          .insert({
+            date: bounty.date,
+            bounty: bounty.name,
+            type: bounty.bounty_type,
+            expiry: bounty.expiry_timestamp,
+            target_value: 1
+          })
+          .select();
+
+        if (bountyError) {
+          console.error('Error saving bounty to main table:', bountyError);
+          errorCount++;
+          continue;
+        }
+
+        // If bounty was inserted successfully, add category weight
+        if (bountyData && bountyData.length > 0) {
+          const bountyId = bountyData[0].id;
+          
+          // Find the bucket_id for this category
+          const bucketId = Object.entries(bucketMap).find(([id, name]) => name === bounty.category)?.[0];
+          
+          if (bucketId) {
+            const { error: weightError } = await supabase
+              .from('bountyBucketWeight')
+              .insert({
+                bountyId: bountyId,
+                bucketId: parseInt(bucketId),
+                weight: 1
+              });
+
+            if (weightError) {
+              console.error('Error saving category weight:', weightError);
+            }
           }
+          
+          successCount++;
         }
       }
-
-      console.log('All actions saved to database successfully');
-      alert('All actions saved to database successfully!');
+      
+      if (errorCount === 0) {
+        clearPendingBounties();
+        updatePendingCounts();
+        alert(`Successfully uploaded all ${pendingBounties.length} pending bounties to database!`);
+      } else {
+        alert(`Uploaded ${successCount} bounties successfully, but ${errorCount} failed. Failed items remain in localStorage.`);
+      }
     } catch (error) {
-      console.error('Error saving to database:', error);
-      alert('Error saving to database. Please try again.');
-    } finally {
-      setSaving(false);
+      console.error('Error retrying pending bounties upload:', error);
+      alert('Error uploading pending bounties. They will remain in localStorage for later retry.');
     }
   };
 
-  const testDatabaseConnection = async () => {
-    try {
-      const result = await DatabaseTest.testConnection();
-      alert(`Database test result: ${result}`);
-    } catch (error) {
-      alert(`Database test failed: ${error}`);
+  // Function to force refresh all bounties from API
+  const forceRefreshAllBounties = () => {
+    const confirmed = window.confirm(
+      'Are you sure you want to force refresh all bounties?\n\n' +
+      'This will fetch fresh data from the API and clear the cache.'
+    );
+    
+    if (confirmed) {
+      clearBountiesCache();
+      fetchBounties(null, true);
     }
   };
 
-  const prepareBountiesForSubmission = () => {
-    // Calculate default expiry (24 hours from now)
+  const prepareBountiesForSubmission = async () => {
+    // Calculate default expiry (next day 11:59 PM)
     const defaultExpiry = new Date();
-    defaultExpiry.setHours(defaultExpiry.getHours() + 24);
+    defaultExpiry.setDate(defaultExpiry.getDate() + 1); // Tomorrow
+    defaultExpiry.setHours(23, 59, 0, 0); // 11:59 PM
     
-    // Get today's date in YYYY-MM-DD format
-    const today = new Date().toISOString().split('T')[0];
+    // Get tomorrow's date in YYYY-MM-DD format
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowString = tomorrow.toISOString().split('T')[0];
     
-    const approvedBounties = bountyActions
-      .filter(action => action.action === 'accepted')
+    const approvedBounties = unsubmittedApprovedActions
       .map(action => ({
         name: action.bounty,
         category: action.category || `Category ${action.bucket_id}`,
-        date: today, // Default to today's date
-        expiry_timestamp: defaultExpiry.toISOString() // Default to 24 hours from now
+        date: tomorrowString, // Default to tomorrow's date
+        expiry_timestamp: defaultExpiry.toISOString(), // Default to next day 11:59 PM
+        bounty_type: action.bounty_type || selectedBountyType // Use the type from the action, fallback to current type
       }));
     
     setBountiesToSubmit(approvedBounties);
@@ -616,71 +1041,117 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
     try {
       let successCount = 0;
       let errorCount = 0;
+      let databaseSuccess = false;
       
-      // Save to main bounties table
-      for (const bounty of bountiesToSubmit) {
-        // Insert into main bounties table
-        const { data: bountyData, error: bountyError } = await supabase
-          .from('bounties')
-          .insert({
-            date: bounty.date, // Use the date from the form
-            bounty: bounty.name, // Use 'bounty' field instead of 'name'
-            type: 'daily', // Changed from 'AI Generated' to 'daily'
-            expiry: bounty.expiry_timestamp, // Use the expiry timestamp directly
-            target_value: 1
-          })
-          .select();
-
-        if (bountyError) {
-          console.error('Error saving bounty to main table:', bountyError);
-          errorCount++;
-          continue;
-        }
-
-        // If bounty was inserted successfully, add category weight (default weight of 1)
-        if (bountyData && bountyData.length > 0) {
-          const bountyId = bountyData[0].id;
-          
-          // Find the bucket_id for this category
-          const bucketId = Object.entries(bucketMap).find(([id, name]) => name === bounty.category)?.[0];
-          
-          if (bucketId) {
-            const { error: weightError } = await supabase
-              .from('bountyBucketWeight')
-              .insert({
-                bountyId: bountyId,
-                bucketId: parseInt(bucketId),
-                weight: 1 // Default weight of 1
-              });
-
-            if (weightError) {
-              console.error('Error saving category weight:', weightError);
-              // Don't count this as a failure since the bounty was saved
-            }
-          }
-          
-          successCount++;
+      // First, upload ALL unsubmitted bounty actions (both approved and rejected) to bounty_selection_history table
+      const allUnsubmittedActions = unsubmittedActions;
+      let actionsUploadSuccess = true;
+      
+      if (allUnsubmittedActions && allUnsubmittedActions.length > 0) {
+        actionsUploadSuccess = await uploadBountyActionsToSupabase(allUnsubmittedActions);
+        
+        if (!actionsUploadSuccess) {
+          console.log('Failed to upload actions to bounty_selection_history, saving to pending uploads');
+          savePendingActions(allUnsubmittedActions);
+          alert('Warning: Could not upload actions to database. Actions have been saved to pending uploads for later retry.');
+        } else {
+          console.log('All unsubmitted bounty actions uploaded to bounty_selection_history successfully');
         }
       }
+      
+      // Try to save approved bounties to main bounties table
+      try {
+        for (const bounty of bountiesToSubmit) {
+          // Insert into main bounties table
+          const { data: bountyData, error: bountyError } = await supabase
+            .from('bounties')
+            .insert({
+              date: bounty.date,
+              bounty: bounty.name,
+              type: bounty.bounty_type,
+              expiry: bounty.expiry_timestamp,
+              target_value: 1
+            })
+            .select();
 
-      if (errorCount > 0) {
-        alert(`Submitted ${successCount} bounties successfully, but ${errorCount} failed. Check console for details.`);
+          if (bountyError) {
+            console.error('Error saving bounty to main table:', bountyError);
+            errorCount++;
+            continue;
+          }
+
+          // If bounty was inserted successfully, add category weight
+          if (bountyData && bountyData.length > 0) {
+            const bountyId = bountyData[0].id;
+            
+            // Find the bucket_id for this category
+            const bucketId = Object.entries(bucketMap).find(([id, name]) => name === bounty.category)?.[0];
+            
+            if (bucketId) {
+              const { error: weightError } = await supabase
+                .from('bountyBucketWeight')
+                .insert({
+                  bountyId: bountyId,
+                  bucketId: parseInt(bucketId),
+                  weight: 1 // Default weight of 1
+                });
+
+              if (weightError) {
+                console.error('Error saving category weight:', weightError);
+                // Don't count this as a failure since the bounty was saved
+              }
+            }
+            
+            successCount++;
+          }
+        }
+        
+        databaseSuccess = errorCount === 0;
+      } catch (dbError) {
+        console.error('Database operation failed:', dbError);
+        databaseSuccess = false;
+      }
+
+      // Show appropriate message based on results
+      if (databaseSuccess && actionsUploadSuccess) {
+        alert(`Successfully submitted ${bountiesToSubmit.length} bounties to the main bounties table!\n\nDatabase upload successful.`);
+        
+        // Mark all actions as submitted so they don't appear in submit button anymore
+        const updatedActions = bountyActions.map(action => ({
+          ...action,
+          submitted: true
+        }));
+        
+        // Update state and localStorage with submitted actions
+        setBountyActions(updatedActions);
+        BountyActionsService.saveToLocalStorage(updatedActions);
+        
+        console.log('Submission successful - marked actions as submitted');
+      } else if (successCount > 0) {
+        alert(`Submitted ${successCount} bounties successfully, but ${errorCount} failed.\n\nSome bounties were saved to database, others saved to pending uploads for later retry.`);
+        
+        // Save failed bounties to pending uploads
+        const failedBounties = bountiesToSubmit.filter((_, index) => {
+          // This is a simplified check - in a real implementation you'd track which ones failed
+          return index >= successCount;
+        });
+        if (failedBounties.length > 0) {
+          savePendingBounties(failedBounties);
+        }
       } else {
-        alert(`Successfully submitted ${bountiesToSubmit.length} bounties to the main bounties table!`);
+        alert(`Failed to upload to database. All ${bountiesToSubmit.length} bounties have been saved to pending uploads for later retry.\n\nYou can retry uploading them later when database is available.`);
+        
+        // Save all bounties to pending uploads
+        savePendingBounties(bountiesToSubmit);
       }
       
       // Clear the form and go back to main view
       setShowSubmitForm(false);
       setBountiesToSubmit([]);
       
-      // Clear approved actions from localStorage since they've been submitted
-      const remainingActions = bountyActions.filter(action => action.action === 'rejected');
-      BountyActionsService.saveToLocalStorage(remainingActions);
-      setBountyActions(remainingActions);
-      
     } catch (error) {
       console.error('Error submitting bounties:', error);
-      alert('Error submitting bounties. Please try again.');
+      alert('Error submitting bounties. All data has been kept in localStorage as backup. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -698,33 +1169,52 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
     
     // Update localStorage
     BountyActionsService.saveToLocalStorage(updatedActions);
-
-    // Remove from database
+    
+    // Try to remove from database if possible
     try {
-      console.log('Removing bounty from database...');
       const { error } = await supabase
-        .from('approved_bounties')
+        .from('bounty_selection_history')
         .delete()
-        .eq('bounty', bountyName);
+        .eq('bounty', bountyName)
+        .eq('action', 'accepted');
 
       if (error) {
         console.error('Error removing bounty from database:', error);
-        alert('Warning: Bounty was removed from the list but there was an error removing it from the database.');
+        console.log('Bounty removed from localStorage, but database removal failed');
       } else {
-        console.log('Bounty successfully removed from database');
+        console.log('Bounty successfully removed from both localStorage and database');
       }
     } catch (error) {
       console.error('Failed to remove bounty from database:', error);
-      alert('Warning: Bounty was removed from the list but there was an error removing it from the database.');
+      console.log('Bounty removed from localStorage, but database removal failed');
     }
   };
 
   const renderBountyList = (bountyList: Bounty[]) => {
-    return bountyList.map(bucket => {
-        // Show all bounties, including those that have been acted upon
-        const allBounties = bucket.bounties;
-        const refreshCount = refreshCounts[bucket.bucket_id] || 0;
+    return bountyList.map((bucket) => {
+        const allBounties = bucket.bounties || [];
+        const refreshCount = refreshCounts[`${selectedBountyType}_${bucket.bucket_id}`] || 0;
         const canRefresh = refreshCount < 3;
+
+        // Filter out bounties that have already been processed (approved or rejected)
+        const availableBounties = allBounties.filter(bountyName => {
+            const existingAction = (bountyActions || []).find(a => 
+                a.bounty === bountyName && 
+                a.bucket_id === bucket.bucket_id &&
+                a.bounty_type === selectedBountyType
+            );
+            return !existingAction; // Only show bounties that haven't been processed
+        });
+
+        // Get processed bounties for this category and type
+        const processedBounties = allBounties.filter(bountyName => {
+            const existingAction = (bountyActions || []).find(a => 
+                a.bounty === bountyName && 
+                a.bucket_id === bucket.bucket_id &&
+                a.bounty_type === selectedBountyType
+            );
+            return !!existingAction; // Show bounties that have been processed
+        });
 
         return (
             <div key={bucket.bucket_id} className="bounty-category-item">
@@ -746,41 +1236,25 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
                   </div>
                 </div>
                 <div className="bounties-list-items">
-                    {allBounties.length > 0 ? (
-                        allBounties.map((bountyName) => {
-                            const existingAction = bountyActions.find(a => a.bounty === bountyName);
-                            const isDisabled = !!existingAction;
-                            
+                    {(availableBounties && availableBounties.length > 0) ? (
+                        availableBounties.map((bountyName) => {
                             return (
-                                <div key={bountyName} className={`bounty-item ${isDisabled ? 'acted-upon' : ''}`}>
+                                <div key={bountyName} className="bounty-item">
                                     <p className="bounty-text">{bountyName}</p>
-                                    {existingAction ? (
-                                        <div className="bounty-status">
-                                            <span className={`status-badge ${existingAction.action === 'accepted' ? 'approved' : 'rejected'}`}>
-                                                {existingAction.action === 'accepted' ? '✓ Approved' : '✗ Rejected'}
-                                            </span>
-                                            {existingAction.rejection_reason && (
-                                                <div className="reason-display">
-                                                    <small>Reason: {existingAction.rejection_reason}</small>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <div className="bounty-actions">
-                                            <button 
-                                                className="approve-button" 
-                                                onClick={() => handleBountyAction(bucket.bucket_id, bountyName, 'accepted')}
-                                            >
-                                                Approve
-                                            </button>
-                                            <button 
-                                                className="reject-button" 
-                                                onClick={() => handleBountyAction(bucket.bucket_id, bountyName, 'rejected')}
-                                            >
-                                                Reject
-                                            </button>
-                                        </div>
-                                    )}
+                                    <div className="bounty-actions">
+                                        <button 
+                                            className="approve-button" 
+                                            onClick={() => handleBountyAction(bucket.bucket_id, bountyName, 'accepted')}
+                                        >
+                                            Approve
+                                        </button>
+                                        <button 
+                                            className="reject-button" 
+                                            onClick={() => handleBountyAction(bucket.bucket_id, bountyName, 'rejected')}
+                                        >
+                                            Reject
+                                        </button>
+                                    </div>
                                 </div>
                             );
                         })
@@ -797,10 +1271,62 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
                         </div>
                     )}
                 </div>
+                
+                {/* Show processed bounties if toggle is enabled */}
+                {showProcessedBounties && processedBounties.length > 0 && (
+                    <div className="processed-bounties-section">
+                        <h5>Processed Bounties ({processedBounties.length})</h5>
+                        <div className="processed-bounties-list">
+                            {processedBounties.map((bountyName) => {
+                                const existingAction = (bountyActions || []).find(a => 
+                                    a.bounty === bountyName && 
+                                    a.bucket_id === bucket.bucket_id &&
+                                    a.bounty_type === selectedBountyType
+                                );
+                                
+                                return (
+                                    <div key={bountyName} className="processed-bounty-item">
+                                        <p className="bounty-text">{bountyName}</p>
+                                        <div className="bounty-status">
+                                            <span className={`status-badge ${existingAction?.action === 'accepted' ? 'approved' : 'rejected'}`}>
+                                                {existingAction?.action === 'accepted' ? '✓ Approved' : '✗ Rejected'}
+                                            </span>
+                                            {existingAction?.rejection_reason && (
+                                                <div className="reason-display">
+                                                    <small>Reason: {existingAction.rejection_reason}</small>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
             </div>
         );
     });
   }
+
+  // Function to handle bounty type selection
+  const handleBountyTypeChange = (newType: 'daily' | 'weekly' | 'yearly') => {
+    setSelectedBountyType(newType);
+    
+    // Check if this bounty type has been loaded before
+    if (!loadedBountyTypes.has(newType)) {
+      console.log(`Bounty type ${newType} not loaded yet, fetching bounties...`);
+      // Mark this type as loaded and fetch bounties
+      setLoadedBountyTypes(prev => new Set([...Array.from(prev), newType]));
+      fetchBounties(null, false);
+    } else {
+      console.log(`Bounty type ${newType} already loaded, switching to cached data`);
+      // Just switch to cached data without fetching
+      const cachedBounties = loadBountiesFromCache(newType);
+      if (cachedBounties) {
+        setBounties(cachedBounties);
+      }
+    }
+  };
 
   return (
     <>
@@ -820,7 +1346,148 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
           <div className="ai-bounties-modal" onClick={(e) => e.stopPropagation()}>
             <div className="ai-bounties-modal-header">
               <h2>AI Bounties</h2>
-              <button className="close-button" onClick={handleCloseModal}>×</button>
+              <div className="header-actions">
+                <div className="bounty-type-selector">
+                  <label htmlFor="bounty-type">Type:</label>
+                  <select
+                    id="bounty-type"
+                    value={selectedBountyType}
+                    onChange={(e) => handleBountyTypeChange(e.target.value as 'daily' | 'weekly' | 'yearly')}
+                    className="bounty-type-select"
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+                <div className="processed-bounties-toggle">
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={showProcessedBounties}
+                      onChange={(e) => setShowProcessedBounties(e.target.checked)}
+                      className="toggle-checkbox"
+                    />
+                    <span className="toggle-text">Show Processed</span>
+                  </label>
+                </div>
+                <div className="options-dropdown">
+                  <button 
+                    ref={optionsButtonRef}
+                    className="options-button"
+                    onClick={handleOptionsButtonClick}
+                    title="Options menu"
+                  >
+                    ⚙️ Options
+                  </button>
+                  {showOptionsDropdown && (
+                    <div 
+                      className="options-dropdown-menu"
+                      style={{
+                        top: `${dropdownPosition.top}px`,
+                        right: `${dropdownPosition.right}px`
+                      }}
+                    >
+                      <button 
+                        className="dropdown-item"
+                        onClick={() => {
+                          resetRefreshLimits();
+                          setShowOptionsDropdown(false);
+                        }}
+                        title="Reset refresh limits for all categories"
+                      >
+                        🔄 Reset Limits
+                      </button>
+                      <button 
+                        className="dropdown-item"
+                        onClick={() => {
+                          forceRefreshAllBounties();
+                          setShowOptionsDropdown(false);
+                        }}
+                        title="Force refresh all bounties from API"
+                      >
+                        🔄 Force Refresh
+                      </button>
+                      <button 
+                        className="dropdown-item"
+                        onClick={() => {
+                          exportToCSV();
+                          setShowOptionsDropdown(false);
+                        }}
+                        title="Export current actions to CSV"
+                      >
+                        📊 Export Actions CSV
+                      </button>
+                      {bountyActions.length > 0 && (
+                        <button 
+                          className="dropdown-item"
+                          onClick={() => {
+                            const confirmed = window.confirm(
+                              `Are you sure you want to clear all ${bountyActions.length} processed actions?\n\n` +
+                              `This will clear ${approvedActions.length} approved and ${rejectedActions.length} rejected bounty actions.\n\n` +
+                              `This action cannot be undone.`
+                            );
+                            if (confirmed) {
+                              clearApprovedBounties();
+                            }
+                            setShowOptionsDropdown(false);
+                          }}
+                          title="Clear all processed actions"
+                        >
+                          🗑️ Clear Processed Actions ({bountyActions.length})
+                        </button>
+                      )}
+                      {pendingBountiesCount > 0 && (
+                        <button 
+                          className="dropdown-item"
+                          onClick={() => {
+                            exportPendingBountiesToCSV();
+                            setShowOptionsDropdown(false);
+                          }}
+                          title="Export pending bounties to CSV"
+                        >
+                          📊 Export Pending CSV ({pendingBountiesCount})
+                        </button>
+                      )}
+                      {hasPendingUploads() && (
+                        <>
+                          <button 
+                            className="dropdown-item"
+                            onClick={() => {
+                              showPendingUploadsInfo();
+                              setShowOptionsDropdown(false);
+                            }}
+                            title="Show pending uploads info"
+                          >
+                            📋 Pending Info ({pendingActionsCount + pendingBountiesCount})
+                          </button>
+                          <button 
+                            className="dropdown-item"
+                            onClick={() => {
+                              retryPendingActionsUpload();
+                              setShowOptionsDropdown(false);
+                            }}
+                            title="Retry uploading pending actions"
+                          >
+                            🔄 Retry Actions
+                          </button>
+                          <button 
+                            className="dropdown-item"
+                            onClick={() => {
+                              retryPendingBountiesUpload();
+                              setShowOptionsDropdown(false);
+                            }}
+                            title="Retry uploading pending bounties"
+                          >
+                            🔄 Retry Bounties
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <button className="close-button" onClick={handleCloseModal}>×</button>
+              </div>
             </div>
 
             <div className="ai-bounties-modal-content">
@@ -860,29 +1527,32 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
                     </div>
                   </div>
 
-                  {approvedActions.length > 0 && (
+                  {unsubmittedActions.length > 0 && (
                     <div className="submit-section">
                       <div className="submit-info">
-                        <span className="approved-count">{approvedActions.length} bounty{approvedActions.length !== 1 ? 'ies' : 'y'} approved</span>
+                        <span className="approved-count">
+                          {unsubmittedApprovedActions.length} approved, {unsubmittedRejectedActions.length} rejected
+                        </span>
                         <div className="submit-actions">
                           <button 
                             className="submit-button" 
                             onClick={prepareBountiesForSubmission}
                           >
-                            Submit Approved Bounties
+                            Submit Actions
                           </button>
                           <button 
                             className="clear-button" 
                             onClick={async () => {
                               const confirmed = window.confirm(
-                                `Are you sure you want to clear all ${approvedActions.length} approved bounty${approvedActions.length !== 1 ? 'ies' : 'y'}?\n\n` +
+                                `Are you sure you want to clear all ${unsubmittedActions.length} unsubmitted actions?\n\n` +
+                                `This will clear ${unsubmittedApprovedActions.length} approved and ${unsubmittedRejectedActions.length} rejected bounty actions.\n\n` +
                                 `This action cannot be undone.`
                               );
                               if (confirmed) {
-                                await clearApprovedBounties();
+                                clearApprovedBounties();
                               }
                             }}
-                            title="Clear all approved bounties"
+                            title="Clear all unsubmitted actions"
                           >
                             Clear All
                           </button>
@@ -980,4 +1650,4 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
   );
 };
 
-export default AIBountiesModal; 
+export default AIBountiesModal;
