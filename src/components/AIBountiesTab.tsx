@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AIBountiesService, AIBounty, BountyToBeSubmitted, SubmitBountyData } from '../services/aiBountiesService';
 import { AIBountyGenerator } from '../utils/aiBountyGenerator';
 import './AIBountiesTab.css';
@@ -20,7 +20,7 @@ const AIBountiesTab: React.FC = () => {
   const [bounties, setBounties] = useState<AIBounty[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
+  const [selectedStatus, setSelectedStatus] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('pending');
   const [bountyCounts, setBountyCounts] = useState<BountyCounts>({ pending: 0, accepted: 0, rejected: 0, finalized: 0 });
   const [generating, setGenerating] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
@@ -60,6 +60,9 @@ const AIBountiesTab: React.FC = () => {
     bountiesToSubmit: [],
     loading: false
   });
+
+  // Add ref to track if generation is already in progress
+  const isGeneratingRef = useRef(false);
 
   // Fetch bounties and counts
   const fetchData = useCallback(async () => {
@@ -308,9 +311,16 @@ const AIBountiesTab: React.FC = () => {
     }
   };
 
-  // Handle generate bounties for all categories
+  // Handle generate all bounties
   const handleGenerateAllBounties = async () => {
     try {
+      if (isGeneratingRef.current) {
+        console.log('Generation already in progress, ignoring click');
+        setError('Generation already in progress. Please wait for it to complete.');
+        return;
+      }
+      
+      isGeneratingRef.current = true;
       setGenerating(true);
       setError(null);
 
@@ -326,12 +336,20 @@ const AIBountiesTab: React.FC = () => {
       setError('Failed to generate new bounties. Please try again.');
     } finally {
       setGenerating(false);
+      isGeneratingRef.current = false;
     }
   };
 
   // Handle generate bounties for specific category and type
   const handleGenerateCategoryBounties = async (categoryId: number, type: 'daily' | 'weekly' | 'yearly') => {
     try {
+      if (isGeneratingRef.current) {
+        console.log('Generation already in progress, ignoring click');
+        setError('Generation already in progress. Please wait for it to complete.');
+        return;
+      }
+      
+      isGeneratingRef.current = true;
       setGenerating(true);
       setError(null);
 
@@ -347,6 +365,7 @@ const AIBountiesTab: React.FC = () => {
       setError('Failed to generate new bounties. Please try again.');
     } finally {
       setGenerating(false);
+      isGeneratingRef.current = false;
     }
   };
 
@@ -518,8 +537,6 @@ const AIBountiesTab: React.FC = () => {
                     const typeKey = `${categoryId}-${type}`;
                     const isTypeExpanded = expandedTypes.has(typeKey);
                     
-                    if (typeBounties.length === 0) return null;
-
                     return (
                       <div key={type} className="type-section">
                         <div 
@@ -535,46 +552,53 @@ const AIBountiesTab: React.FC = () => {
 
                         {isTypeExpanded && (
                           <div className="type-content">
-                            {typeBounties.map((bounty) => (
-                              <div key={bounty.id} className={`bounty-card ${bounty.action}`}>
-                                <div className="bounty-header">
-                                  <div className={`bounty-status ${getStatusBadgeClass(bounty.action)}`}>
-                                    {getStatusDisplayText(bounty.action)}
+                            {typeBounties.length === 0 ? (
+                              <div className="no-bounties-type">
+                                <p>No {type} bounties found for this category.</p>
+                                <p>Click the "Daily" button above to generate new bounties.</p>
+                              </div>
+                            ) : (
+                              typeBounties.map((bounty) => (
+                                <div key={bounty.id} className={`bounty-card ${bounty.action}`}>
+                                  <div className="bounty-header">
+                                    <div className={`bounty-status ${getStatusBadgeClass(bounty.action)}`}>
+                                      {getStatusDisplayText(bounty.action)}
+                                    </div>
                                   </div>
-                                </div>
-                                
-                                <div className="bounty-content">
-                                  <div className="bounty-text">{bounty.bounty}</div>
-                                  <div className="bounty-meta">
-                                    <span className="bounty-date">
-                                      {new Date(bounty.created_at).toLocaleDateString()}
-                                    </span>
+                                  
+                                  <div className="bounty-content">
+                                    <div className="bounty-text">{bounty.bounty}</div>
+                                    <div className="bounty-meta">
+                                      <span className="bounty-date">
+                                        {new Date(bounty.created_at).toLocaleDateString()}
+                                      </span>
+                                    </div>
+                                    {bounty.notes && (
+                                      <div className="bounty-notes">
+                                        <strong>Notes:</strong> {bounty.notes}
+                                      </div>
+                                    )}
                                   </div>
-                                  {bounty.notes && (
-                                    <div className="bounty-notes">
-                                      <strong>Notes:</strong> {bounty.notes}
+
+                                  {bounty.action === 'pending' && (
+                                    <div className="bounty-actions">
+                                      <button 
+                                        className="approve-button"
+                                        onClick={() => handleApprove(bounty)}
+                                      >
+                                        Approve
+                                      </button>
+                                      <button 
+                                        className="reject-button"
+                                        onClick={() => handleReject(bounty)}
+                                      >
+                                        Reject
+                                      </button>
                                     </div>
                                   )}
                                 </div>
-
-                                {bounty.action === 'pending' && (
-                                  <div className="bounty-actions">
-                                    <button 
-                                      className="approve-button"
-                                      onClick={() => handleApprove(bounty)}
-                                    >
-                                      Approve
-                                    </button>
-                                    <button 
-                                      className="reject-button"
-                                      onClick={() => handleReject(bounty)}
-                                    >
-                                      Reject
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
+                              ))
+                            )}
                           </div>
                         )}
                       </div>
@@ -593,6 +617,14 @@ const AIBountiesTab: React.FC = () => {
             ? 'No bounties found. Click "Generate All Categories" to create some!' 
             : `No ${selectedStatus} bounties found.`
           }
+        </div>
+      )}
+
+      {/* Show message for empty categories */}
+      {availableCategories.length > 0 && Object.keys(categoryBounties).length === 0 && (
+        <div className="no-bounties">
+          <p>No bounties found for the selected status.</p>
+          <p>Click "Generate All Categories" to create new bounties, or use the "Daily" buttons on individual categories.</p>
         </div>
       )}
 

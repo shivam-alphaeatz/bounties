@@ -37,7 +37,45 @@ export class AIBountiesService {
   // Step A: AI Generation Function (runs independently) -> Step B: Insert into bounty_selection_history (status: pending)
   static async insertPendingBounties(bounties: PendingBounty[]): Promise<void> {
     try {
-      const pendingBounties = bounties.map(bounty => ({
+      // Check for existing bounties to prevent duplicates
+      const existingBounties = await supabase
+        .from('bounty_selection_history')
+        .select('bounty, bucket_id, type')
+        .in('action', ['pending', 'accepted'])
+        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()); // Last 24 hours
+
+      const existingBountySet = new Set();
+      const existingBountyTextSet = new Set(); // For exact text matches
+      
+      if (existingBounties.data) {
+        existingBounties.data.forEach(bounty => {
+          existingBountySet.add(`${bounty.bounty}-${bounty.bucket_id}-${bounty.type}`);
+          existingBountyTextSet.add(bounty.bounty); // Add just the bounty text
+        });
+      }
+
+      // Filter out duplicates - check both combination and exact text
+      const uniqueBounties = bounties.filter(bounty => {
+        const key = `${bounty.bounty}-${bounty.bucket_id}-${bounty.type}`;
+        const isDuplicate = existingBountySet.has(key) || existingBountyTextSet.has(bounty.bounty);
+        
+        if (isDuplicate) {
+          console.log(`Skipping duplicate bounty: "${bounty.bounty}" (bucket_id: ${bounty.bucket_id}, type: ${bounty.type})`);
+        } else {
+          console.log(`New bounty to insert: "${bounty.bounty}" (bucket_id: ${bounty.bucket_id}, type: ${bounty.type})`);
+        }
+        
+        return !isDuplicate;
+      });
+
+      if (uniqueBounties.length === 0) {
+        console.log('All bounties already exist, skipping insertion');
+        return;
+      }
+
+      console.log(`Inserting ${uniqueBounties.length} unique bounties (filtered from ${bounties.length} total)`);
+
+      const pendingBounties = uniqueBounties.map(bounty => ({
         bucket_id: bounty.bucket_id,
         category: bounty.category,
         bounty: bounty.bounty,

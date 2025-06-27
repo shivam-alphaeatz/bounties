@@ -16,16 +16,20 @@ export class AIBountyGenerator {
     try {
       console.log(`Calling AI generation API for bucket_id=${bucketId}, type=${type}`);
       
+      const requestBody = {
+        bucket_id: bucketId,
+        type: type
+      };
+      
+      console.log('API Request body:', JSON.stringify(requestBody, null, 2));
+      
       const response = await fetch('https://nwfhqrmdjmjopbxulyhu.supabase.co/functions/v1/bountygen', {
         method: 'POST',
         headers: {
           'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53Zmhxcm1kam1qb3BieHVseWh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNjc5MDMsImV4cCI6MjA2MTg0MzkwM30.NvbyIKp7BxALfO0SBpdFcbCXXhPcOJ_4YJY8HPyVlzs',
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          bucket_id: 0,
-          type: type
-        })
+        body: JSON.stringify(requestBody)
       });
 
       console.log(`API Response status: ${response.status}`);
@@ -39,16 +43,25 @@ export class AIBountyGenerator {
       const data = await response.json();
       console.log('API Response data:', data);
       
-      // Check if the response contains bounties
-      if (data && Array.isArray(data) && data.length > 0 && data[0].bounties) {
-        console.log(`Generated ${data[0].bounties.length} bounties for bucket_id=${bucketId}`);
-        return data[0].bounties;
+      // The API now returns bounties for the specific category only
+      if (data && Array.isArray(data) && data.length > 0) {
+        const categoryData = data[0]; // Should be the only item in the array
+        
+        if (categoryData && categoryData.bucket_id === bucketId && categoryData.bounties && Array.isArray(categoryData.bounties)) {
+          console.log(`Found ${categoryData.bounties.length} bounties for bucket_id=${bucketId}`);
+          console.log('Bounties for this category:', categoryData.bounties);
+          return categoryData.bounties;
+        } else {
+          console.warn(`No bounties found for bucket_id=${bucketId} in the API response`);
+          console.log('Response structure:', data);
+          throw new Error(`No bounties found for bucket_id=${bucketId}`);
+        }
       } else if (data && data.error) {
         console.warn(`API returned error: ${data.error}`);
         throw new Error(`AI Generation failed: ${data.error}`);
       } else {
-        console.warn(`No bounties generated for bucket_id=${bucketId} and type=${type}. Response:`, data);
-        throw new Error(`No bounties generated for bucket_id=${bucketId} and type=${type}`);
+        console.warn(`Invalid response format for bucket_id=${bucketId} and type=${type}. Response:`, data);
+        throw new Error(`Invalid response format for bucket_id=${bucketId} and type=${type}`);
       }
     } catch (error) {
       console.error(`Error calling AI generation API for bucket_id=${bucketId}, type=${type}:`, error);
@@ -121,12 +134,19 @@ export class AIBountyGenerator {
       const pendingBounties: PendingBounty[] = [];
       const failedCategories: string[] = [];
       
+      // Process categories sequentially to avoid race conditions
       for (const catId of Object.keys(categoryMap)) {
         const categoryId = parseInt(catId);
         const categoryName = categoryMap[categoryId];
         
         try {
           console.log(`Generating bounties for category: ${categoryName} (ID: ${categoryId})`);
+          
+          // Add a small delay between API calls to prevent rate limiting
+          if (pendingBounties.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          
           const aiBounties = await this.callAIGenerationAPI(categoryId, bountyType);
           const selectedBounties = aiBounties.slice(0, countPerCategory);
           
@@ -147,6 +167,7 @@ export class AIBountyGenerator {
       }
       
       if (pendingBounties.length > 0) {
+        // Insert all bounties in a single transaction to avoid partial insertions
         await AIBountiesService.insertPendingBounties(pendingBounties);
         console.log(`Successfully inserted ${pendingBounties.length} pending bounties for all categories`);
         

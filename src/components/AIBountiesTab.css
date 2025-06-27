@@ -388,9 +388,32 @@
 
 .no-bounties {
   text-align: center;
-  padding: 40px;
+  padding: 40px 20px;
   color: #666;
-  font-style: italic;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border: 1px solid #e0e0e0;
+}
+
+.no-bounties p {
+  margin: 10px 0;
+  font-size: 16px;
+}
+
+.no-bounties-type {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+  background: #f8f9fa;
+  border-radius: 6px;
+  margin: 10px;
+  border: 1px dashed #ddd;
+}
+
+.no-bounties-type p {
+  margin: 8px 0;
+  font-size: 14px;
 }
 
 .ai-bounties-loading {
