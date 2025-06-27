@@ -1,0 +1,660 @@
+.ai-bounties-tab {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.ai-bounties-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ai-bounties-header h2 {
+  margin: 0;
+  color: #333;
+  font-size: 24px;
+}
+
+.ai-bounties-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.generate-button,
+.submit-button,
+.cleanup-button {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.generate-button {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.generate-button:hover:not(:disabled) {
+  background-color: #45a049;
+}
+
+.submit-button {
+  background-color: #2196F3;
+  color: white;
+}
+
+.submit-button:hover:not(:disabled) {
+  background-color: #1976D2;
+}
+
+.cleanup-button {
+  background-color: #ff9800;
+  color: white;
+}
+
+.cleanup-button:hover:not(:disabled) {
+  background-color: #f57c00;
+}
+
+.generate-button:disabled,
+.submit-button:disabled,
+.cleanup-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ai-bounties-error {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ai-bounties-error button {
+  background: none;
+  border: none;
+  color: #c62828;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 10px;
+}
+
+.ai-bounties-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border: 1px solid #e0e0e0;
+}
+
+.stat-number {
+  display: block;
+  font-size: 24px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 5px;
+}
+
+.stat-label {
+  color: #666;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ai-bounties-filters {
+  margin-bottom: 20px;
+}
+
+.status-filter {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  min-width: 200px;
+}
+
+.ai-bounties-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.category-section {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border: 1px solid #e0e0e0;
+  overflow: hidden;
+}
+
+.category-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background: #f8f9fa;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.category-header:hover {
+  background: #e9ecef;
+}
+
+.category-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.category-name {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.category-count {
+  color: #666;
+  font-size: 14px;
+}
+
+.category-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.generate-category-button {
+  padding: 6px 12px;
+  border: 1px solid #ddd;
+  background: white;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.generate-category-button:hover:not(:disabled) {
+  background: #f0f0f0;
+  border-color: #bbb;
+}
+
+.generate-category-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.expand-icon {
+  font-size: 12px;
+  transition: transform 0.2s ease;
+  color: #666;
+}
+
+.expand-icon.expanded {
+  transform: rotate(180deg);
+}
+
+.category-content {
+  padding: 0 20px 20px;
+}
+
+.type-section {
+  margin-top: 15px;
+}
+
+.type-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  cursor: pointer;
+  border-bottom: 1px solid #eee;
+}
+
+.type-header:hover {
+  background: #f8f9fa;
+  margin: 0 -10px;
+  padding: 10px;
+  border-radius: 4px;
+}
+
+.type-name {
+  margin: 0;
+  font-size: 16px;
+  color: #333;
+  text-transform: capitalize;
+}
+
+.type-count {
+  color: #666;
+  font-size: 14px;
+}
+
+.type-content {
+  padding: 10px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bounty-card {
+  background: #f8f9fa;
+  border-radius: 6px;
+  padding: 15px;
+  border-left: 4px solid #ddd;
+  transition: all 0.2s ease;
+}
+
+.bounty-card.pending {
+  border-left-color: #ffc107;
+  background: #fff8e1;
+}
+
+.bounty-card.accepted {
+  border-left-color: #4caf50;
+  background: #e8f5e8;
+}
+
+.bounty-card.rejected {
+  border-left-color: #f44336;
+  background: #ffebee;
+}
+
+.bounty-card.finalized {
+  border-left-color: #9e9e9e;
+  background: #f5f5f5;
+}
+
+.bounty-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.bounty-status {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-approved {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-rejected {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.status-finalized {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.bounty-content {
+  margin-bottom: 10px;
+}
+
+.bounty-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.bounty-meta {
+  display: flex;
+  gap: 15px;
+  font-size: 12px;
+  color: #666;
+}
+
+.bounty-notes {
+  font-size: 12px;
+  color: #666;
+  font-style: italic;
+  margin-top: 8px;
+  padding: 8px;
+  background: rgba(0,0,0,0.05);
+  border-radius: 4px;
+}
+
+.bounty-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.approve-button,
+.reject-button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.approve-button {
+  background: #4caf50;
+  color: white;
+}
+
+.approve-button:hover {
+  background: #45a049;
+}
+
+.reject-button {
+  background: #f44336;
+  color: white;
+}
+
+.reject-button:hover {
+  background: #d32f2f;
+}
+
+.no-bounties {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+  font-style: italic;
+}
+
+.ai-bounties-loading {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+/* Modal Styles */
+.rejection-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.rejection-modal {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.rejection-modal h3 {
+  margin: 0 0 20px 0;
+  color: #333;
+  font-size: 20px;
+}
+
+.rejection-content {
+  margin-bottom: 20px;
+}
+
+.rejection-content p {
+  margin: 0 0 15px 0;
+  line-height: 1.5;
+}
+
+.rejection-notes {
+  margin-top: 15px;
+}
+
+.rejection-notes label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #333;
+}
+
+.rejection-notes textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.rejection-notes textarea:focus {
+  outline: none;
+  border-color: #2196F3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+.rejection-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.cancel-button,
+.confirm-reject-button {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.cancel-button {
+  background: #f5f5f5;
+  color: #333;
+}
+
+.cancel-button:hover {
+  background: #e0e0e0;
+}
+
+.confirm-reject-button {
+  background: #f44336;
+  color: white;
+}
+
+.confirm-reject-button:hover:not(:disabled) {
+  background: #d32f2f;
+}
+
+.confirm-reject-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.confirm-approve-button {
+  background: #4caf50;
+  color: white;
+}
+
+.confirm-approve-button:hover:not(:disabled) {
+  background: #45a049;
+}
+
+.confirm-approve-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Form styles for submit modal */
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #2196F3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+.help-text {
+  font-size: 12px;
+  color: #666;
+  margin-top: 10px;
+  padding: 8px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  border-left: 3px solid #2196F3;
+}
+
+/* Bounties to submit styles */
+.bounties-to-submit {
+  margin-top: 20px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.bounties-to-submit h4 {
+  margin: 0 0 10px 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.bounties-list {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bounty-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+  font-size: 14px;
+}
+
+.bounty-item .bounty-text {
+  flex: 1;
+  margin: 0;
+  color: #333;
+}
+
+.bounty-item .bounty-category {
+  color: #666;
+  font-size: 12px;
+  margin-left: 10px;
+}
+
+.no-bounties-message {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+  font-style: italic;
+  background: #f8f9fa;
+  border-radius: 4px;
+  border: 1px dashed #dee2e6;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .ai-bounties-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .ai-bounties-actions {
+    justify-content: center;
+  }
+  
+  .category-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  
+  .category-actions {
+    justify-content: center;
+  }
+  
+  .bounty-actions {
+    flex-direction: column;
+  }
+  
+  .rejection-actions {
+    flex-direction: column;
+  }
+  
+  .rejection-modal {
+    margin: 20px;
+    width: calc(100% - 40px);
+  }
+  
+  .bounty-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+  
+  .bounty-item .bounty-category {
+    margin-left: 0;
+  }
+} 

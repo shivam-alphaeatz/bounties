@@ -104,7 +104,7 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
   
   // Add refresh counters for each category and type (max 3 refreshes per category per type)
   const [refreshCounts, setRefreshCounts] = useState<{[key: string]: number}>({});
-  
+
   // Track pending uploads counts
   const [pendingActionsCount, setPendingActionsCount] = useState(0);
   const [pendingBountiesCount, setPendingBountiesCount] = useState(0);
@@ -191,7 +191,7 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
         console.log(`No cached bounties found for type: ${typeToUse}`);
         return null;
       }
-      
+
       const age = Date.now() - parseInt(timestamp);
       if (age > CACHE_DURATION) {
         console.log(`Cache expired for type: ${typeToUse}, age: ${age}ms`);
@@ -199,7 +199,7 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
         localStorage.removeItem(timestampKey);
         return null;
       }
-      
+
       const bounties = JSON.parse(cached);
       console.log(`Loaded ${bounties.length} bounties from cache for type: ${typeToUse}`);
       return bounties;
@@ -627,7 +627,7 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
 
   const clearAllActions = async () => {
     // Clear ALL actions from localStorage and state (both submitted and unsubmitted)
-    setBountyActions([]);
+      setBountyActions([]);
     BountyActionsService.saveToLocalStorage([]);
     
     // Also clear any pending actions
@@ -1241,20 +1241,20 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
                             return (
                                 <div key={bountyName} className="bounty-item">
                                     <p className="bounty-text">{bountyName}</p>
-                                    <div className="bounty-actions">
-                                        <button 
-                                            className="approve-button" 
-                                            onClick={() => handleBountyAction(bucket.bucket_id, bountyName, 'accepted')}
-                                        >
-                                            Approve
-                                        </button>
-                                        <button 
-                                            className="reject-button" 
-                                            onClick={() => handleBountyAction(bucket.bucket_id, bountyName, 'rejected')}
-                                        >
-                                            Reject
-                                        </button>
-                                    </div>
+                                        <div className="bounty-actions">
+                                            <button 
+                                                className="approve-button" 
+                                                onClick={() => handleBountyAction(bucket.bucket_id, bountyName, 'accepted')}
+                                            >
+                                                Approve
+                                            </button>
+                                            <button 
+                                                className="reject-button" 
+                                                onClick={() => handleBountyAction(bucket.bucket_id, bountyName, 'rejected')}
+                                            >
+                                                Reject
+                                            </button>
+                                        </div>
                                 </div>
                             );
                         })
