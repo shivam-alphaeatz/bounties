@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase, bucketMap } from '../supabaseClient';
 import './BountyPromptsTable.css';
 
 interface BountyPrompt {
@@ -200,6 +200,18 @@ const BountyPromptsTable: React.FC = () => {
     }
   };
 
+  // Function to get bucket name from bucket_id
+  const getBucketName = (bucketId: string): string => {
+    const id = parseInt(bucketId);
+    return bucketMap[id as keyof typeof bucketMap] || `Unknown (${bucketId})`;
+  };
+
+  // Function to get unique bucket names for filter dropdown
+  const getUniqueBucketNames = (): string[] => {
+    const bucketNames = prompts.map(prompt => getBucketName(prompt.bucket_id));
+    return Array.from(new Set(bucketNames)).sort();
+  };
+
   const isJsonPrompt = (prompt: string): boolean => {
     try {
       JSON.parse(prompt);
@@ -210,7 +222,8 @@ const BountyPromptsTable: React.FC = () => {
   };
 
   const filteredPrompts = prompts.filter(prompt => {
-    const matchesBucket = !filterBucket || prompt.bucket_id.toLowerCase().includes(filterBucket.toLowerCase());
+    const bucketName = getBucketName(prompt.bucket_id);
+    const matchesBucket = !filterBucket || bucketName.toLowerCase().includes(filterBucket.toLowerCase());
     const matchesType = !filterType || prompt.type.toLowerCase().includes(filterType.toLowerCase());
     return matchesBucket && matchesType;
   });
@@ -236,7 +249,7 @@ const BountyPromptsTable: React.FC = () => {
       <div className="filters">
         <input
           type="text"
-          placeholder="Filter by bucket..."
+          placeholder="Filter by bucket name..."
           value={filterBucket}
           onChange={(e) => setFilterBucket(e.target.value)}
           className="filter-input"
@@ -254,7 +267,7 @@ const BountyPromptsTable: React.FC = () => {
         <table className="prompts-table">
           <thead>
             <tr>
-              <th>Bucket ID</th>
+              <th>Bucket</th>
               <th>Type</th>
               <th>Prompt Preview</th>
               <th>Created</th>
@@ -265,7 +278,7 @@ const BountyPromptsTable: React.FC = () => {
           <tbody>
             {filteredPrompts.map((prompt) => (
               <tr key={prompt.id}>
-                <td>{prompt.bucket_id}</td>
+                <td>{getBucketName(prompt.bucket_id)}</td>
                 <td>{prompt.type}</td>
                 <td>
                   <div className="prompt-preview">
@@ -320,14 +333,20 @@ const BountyPromptsTable: React.FC = () => {
             </div>
             <form onSubmit={handleSubmit} className="prompt-form">
               <div className="form-group">
-                <label htmlFor="bucket_id">Bucket ID:</label>
-                <input
-                  type="text"
+                <label htmlFor="bucket_id">Bucket:</label>
+                <select
                   id="bucket_id"
                   value={formData.bucket_id}
                   onChange={(e) => setFormData({ ...formData, bucket_id: e.target.value })}
                   required
-                />
+                >
+                  <option value="">Select a bucket...</option>
+                  {Object.entries(bucketMap).map(([id, name]) => (
+                    <option key={id} value={id}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="form-group">
                 <label htmlFor="type">Type:</label>
@@ -405,10 +424,10 @@ const BountyPromptsTable: React.FC = () => {
               <button onClick={closeView} className="close-btn">&times;</button>
             </div>
             <div className="prompt-view">
-              <div className="view-group">
-                <label>Bucket ID:</label>
-                <span>{viewingPrompt.bucket_id}</span>
-              </div>
+                              <div className="view-group">
+                  <label>Bucket:</label>
+                  <span>{getBucketName(viewingPrompt.bucket_id)}</span>
+                </div>
               <div className="view-group">
                 <label>Type:</label>
                 <span>{viewingPrompt.type}</span>
