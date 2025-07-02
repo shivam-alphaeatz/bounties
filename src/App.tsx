@@ -4,9 +4,10 @@ import BountiesTable from './components/BountiesTable';
 import BountyBucketWeightTable from './components/BountyBucketWeightTable';
 import RawBountyBucketWeightTable from './components/RawBountyBucketWeightTable';
 import AIBountiesTab from './components/AIBountiesTab';
+import BountyPromptsTable from './components/BountyPromptsTable';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'bounties' | 'categories' | 'raw' | 'ai-bounties'>('bounties');
+  const [activeTab, setActiveTab] = useState<'bounties' | 'categories' | 'raw' | 'ai-bounties' | 'prompts'>('bounties');
 
   return (
     <div className="App">
@@ -39,6 +40,12 @@ function App() {
           >
             AI Bounties
           </button>
+          <button 
+            className={`tab-button ${activeTab === 'prompts' ? 'active' : ''}`}
+            onClick={() => setActiveTab('prompts')}
+          >
+            Bounty Prompts
+          </button>
         </div>
         
         <div className="tab-content">
@@ -46,6 +53,7 @@ function App() {
           {activeTab === 'categories' && <BountyBucketWeightTable />}
           {activeTab === 'raw' && <RawBountyBucketWeightTable />}
           {activeTab === 'ai-bounties' && <AIBountiesTab />}
+          {activeTab === 'prompts' && <BountyPromptsTable />}
         </div>
       </main>
     </div>

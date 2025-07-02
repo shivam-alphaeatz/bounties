@@ -25,6 +25,8 @@ const AIBountiesTab: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
+  const [pendingCounts, setPendingCounts] = useState({ total: 0, old: 0, recent: 0 });
+  const [showCleanupDropdown, setShowCleanupDropdown] = useState(false);
   const [rejectionModal, setRejectionModal] = useState<{
     isOpen: boolean;
     bounty: AIBounty | null;
@@ -70,13 +72,15 @@ const AIBountiesTab: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const [bountiesData, countsData] = await Promise.all([
+      const [bountiesData, countsData, pendingCountsData] = await Promise.all([
         AIBountiesService.getAllBounties(),
-        AIBountiesService.getBountyCounts()
+        AIBountiesService.getBountyCounts(),
+        AIBountiesService.getPendingBountyCounts()
       ]);
 
       setBounties(bountiesData);
       setBountyCounts(countsData);
+      setPendingCounts(pendingCountsData);
     } catch (err) {
       console.error('Error fetching data:', err);
       setError('Failed to load bounties. Please try again.');
@@ -85,10 +89,28 @@ const AIBountiesTab: React.FC = () => {
     }
   }, []);
 
-  // Initial load
+  // Load data on mount
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Handle clicking outside cleanup dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (showCleanupDropdown && !target.closest('.cleanup-dropdown')) {
+        setShowCleanupDropdown(false);
+      }
+    };
+
+    if (showCleanupDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showCleanupDropdown]);
 
   // Set default dates when approval modal opens
   useEffect(() => {
@@ -301,6 +323,14 @@ const AIBountiesTab: React.FC = () => {
 
   // Handle cleanup old pending bounties
   const handleCleanup = async () => {
+    const confirmed = window.confirm(
+      'Are you sure you want to cleanup old pending bounties?\n\n' +
+      'This will remove all pending bounties older than 24 hours from the database.\n\n' +
+      'This action cannot be undone.'
+    );
+    
+    if (!confirmed) return;
+    
     try {
       await AIBountiesService.cleanupOldPendingBounties();
       await fetchData(); // Refresh data
@@ -308,6 +338,26 @@ const AIBountiesTab: React.FC = () => {
     } catch (err) {
       console.error('Error cleaning up old bounties:', err);
       setError('Failed to cleanup old bounties. Please try again.');
+    }
+  };
+
+  // Handle cleanup all pending bounties
+  const handleCleanupAll = async () => {
+    const confirmed = window.confirm(
+      `Are you sure you want to cleanup ALL pending bounties?\n\n` +
+      `This will remove ${pendingCounts.total} pending bounties from the database (${pendingCounts.old} old + ${pendingCounts.recent} recent).\n\n` +
+      `This action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      await AIBountiesService.cleanupAllPendingBounties();
+      await fetchData(); // Refresh data
+      alert(`Successfully cleaned up all ${pendingCounts.total} pending bounties!`);
+    } catch (err) {
+      console.error('Error cleaning up all bounties:', err);
+      setError('Failed to cleanup all bounties. Please try again.');
     }
   };
 
@@ -441,13 +491,39 @@ const AIBountiesTab: React.FC = () => {
           >
             {submissionModal.loading ? 'Loading...' : 'Submit Bounties'}
           </button>
-          <button 
-            className="cleanup-button"
-            onClick={handleCleanup}
-            disabled={bountyCounts.pending === 0}
-          >
-            Cleanup Old Pending
-          </button>
+          <div className="cleanup-dropdown">
+            <button 
+              className="cleanup-dropdown-button"
+              onClick={() => setShowCleanupDropdown(!showCleanupDropdown)}
+              disabled={bountyCounts.pending === 0}
+            >
+              🧹 Cleanup ({pendingCounts.total})
+            </button>
+            {showCleanupDropdown && (
+              <div className="cleanup-dropdown-menu">
+                <button 
+                  className="dropdown-item"
+                  onClick={() => {
+                    handleCleanup();
+                    setShowCleanupDropdown(false);
+                  }}
+                  title="Remove pending bounties older than 24 hours"
+                >
+                  🕐 Cleanup Old ({pendingCounts.old})
+                </button>
+                <button 
+                  className="dropdown-item"
+                  onClick={() => {
+                    handleCleanupAll();
+                    setShowCleanupDropdown(false);
+                  }}
+                  title="Remove all pending bounties"
+                >
+                  🗑️ Cleanup All ({pendingCounts.total})
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

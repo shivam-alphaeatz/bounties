@@ -1,133 +1,112 @@
-# AI Bounties Management System
+# Bounties Management System
 
-A React TypeScript application for managing AI-generated bounties with Supabase integration and database storage.
+A comprehensive React TypeScript application for managing bounties with AI-powered generation, approval workflows, and database integration.
 
 ## Features
 
-- **AI Bounties Modal**: Fetch and manage AI-generated bounties by category
-- **Approval/Rejection System**: Approve or reject bounties with optional rejection reasons
-- **Database Integration**: Save bounty actions to Supabase database
-- **Local Storage Fallback**: Data is saved locally if database connection fails
-- **CSV Export**: Export bounty actions to CSV format
-- **Category Management**: Fetch new bounties for specific categories
-- **Database Testing**: Built-in tools to test database connection and table setup
+### Core Functionality
+- **Bounty Management**: Create, edit, and manage bounties with categories and weights
+- **AI Bounty Generation**: Automated bounty generation using AI prompts
+- **Approval Workflow**: Review and approve/reject AI-generated bounties
+- **Database Integration**: Full CRUD operations with Supabase
+- **Google Sheets Integration**: Export bounty data to Google Sheets
 
-## Database Setup
+### AI Bounties System
+- **Status-based Workflow**: Pending → Approved/Rejected → Finalized
+- **Category Management**: Organize bounties by different life areas
+- **Type Support**: Daily, weekly, and yearly bounty types
+- **Bulk Operations**: Generate bounties for all categories at once
+- **Cleanup Functionality**: Remove old pending bounties (24h+) automatically
 
-The app uses Supabase with the following table structure:
+### JSON Prompt Management
+- **Dynamic JSON Editor**: Key-value pair interface for editing JSON prompts
+- **Real-time Preview**: See JSON structure as you type
+- **Validation**: Automatic JSON validation with visual feedback
+- **CRUD Operations**: Full create, read, update, delete functionality
 
-### bounty_selection_history table
-```sql
-CREATE TABLE bounty_selection_history (
-  id SERIAL PRIMARY KEY,
-  bucket_id INTEGER NOT NULL,
-  category TEXT NOT NULL,
-  bounty TEXT NOT NULL,
-  action TEXT NOT NULL,
-  timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+## Database Schema
+
+### Main Tables
+- `bounties`: Main bounties table
+- `bountyBucketWeight`: Category weights for bounties
+- `bounty_selection_history`: AI bounty workflow tracking
+- `all_bounty_prompts`: JSON prompts for AI generation
+
+### AI Bounties Flow
 ```
-
-### bounties table (main table)
-- `id`: Primary key
-- `name`: Bounty name
-- `category`: Category name
-- `weight`: Bounty weight (1-10)
-- `expiry_days`: Days until expiry
-- `submitted_at`: Submission timestamp
-
-## Quick Start
-
-1. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-2. **Set up environment variables**:
-   Create a `.env` file in the root directory:
-   ```
-   REACT_APP_SUPABASE_URL=your_supabase_url
-   REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
-   ```
-
-3. **Set up the database**:
-   - Create the `bounty_selection_history` table using the SQL above
-   - Create the `bounties` table for approved bounties
-   - Set up appropriate RLS policies
-
-4. **Start the development server**:
-   ```bash
-   npm start
-   ```
+AI Generation → Pending Status → Admin Review → Approved/Rejected → Finalized
+```
 
 ## Usage
 
-1. **Open the AI Bounties Modal**: Click the "AI Bounties" button in the main app
-2. **Fetch Bounties**: The modal will automatically load bounties for all categories
-3. **Review Bounties**: Browse through bounties organized by category
-4. **Take Actions**:
-   - **Approve**: Click "Approve" to accept a bounty
-   - **Reject**: Click "Reject" to reject a bounty (you can add a reason)
-   - **Add New**: Click "Add New" to fetch fresh bounties for a specific category
-5. **Save Data**: Click "Save to Database" to save all actions to Supabase
-6. **Export**: Use "Export to CSV" to download your data
-7. **Submit Approved**: Use "Submit Approved to Main Table" to move approved bounties to the main bounties table
+### AI Bounties Management
+1. **Generate Bounties**: Click "Generate All Categories" to create new AI bounties
+2. **Review & Approve**: Review pending bounties and approve/reject them
+3. **Submit to Main Table**: Submit approved bounties to the main bounties table
+4. **Cleanup Old Pending**: Remove bounties older than 24 hours using the cleanup button
+
+### Cleanup Functionality
+- **Smart Cleanup Options**: Dropdown menu with two cleanup options
+  - **Cleanup Old Pending**: Removes pending bounties older than 24 hours
+  - **Cleanup All Pending**: Removes all pending bounties regardless of age
+- **Real-time Counts**: Shows current pending bounty counts (total, old, recent)
+- **Confirmation Dialogs**: Safe cleanup with detailed confirmation messages
+- **Automatic Refresh**: Data refreshes automatically after cleanup operations
+
+### JSON Prompt Management
+1. **View Prompts**: Browse all JSON prompts in the Bounty Prompts tab
+2. **Edit Prompts**: Use the key-value interface to modify JSON structure
+3. **Add Fields**: Dynamically add new key-value pairs
+4. **Preview JSON**: See the formatted JSON output in real-time
 
 ## API Integration
 
-The app fetches AI-generated bounties from:
-`https://nwfhqrmdjmjopbxulyhu.supabase.co/functions/v1/bountygen`
+### Supabase Edge Functions
+- **Bounty Generation**: `/functions/v1/bountygen` - Generate AI bounties
+- **Bounties to Submit**: `/functions/v1/bounties_to_be_submitted` - Get approved bounties
 
-- Send `{"bucket_id": null}` to fetch all categories
-- Send `{"bucket_id": categoryId}` to fetch specific category
-
-## Category Mapping
-
-- Bucket ID 1: Nourish
-- Bucket ID 2: Rest
-- Bucket ID 3: Active Life
-- Bucket ID 4: Connect
-- Bucket ID 5: Mindset
-- Bucket ID 6: Explore
-
-## Troubleshooting
-
-### Database Issues
-- Use the "Test DB" button to check database connection
-- Check the browser console for detailed error messages
-- Verify your Supabase credentials in the `.env` file
-- Ensure the `bounty_selection_history` table exists
-
-### General Issues
-- Check the browser console for error messages
-- Verify all environment variables are set correctly
-- Ensure your Supabase project is properly configured
-
-## File Structure
-
+### Environment Variables
+```env
+REACT_APP_SUPABASE_URL=your_supabase_url
+REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
+REACT_APP_SUPABASE_EDGE_FUNCTION_URL=your_edge_function_url
 ```
-src/
-├── components/
-│   ├── AIBountiesModal.tsx      # Main modal component
-│   ├── AIBountiesModal.css      # Modal styles
-│   ├── BountiesTable.tsx        # Bounties display table
-│   ├── BountyForm.tsx           # Bounty submission form
-│   └── ...
-├── services/
-│   ├── bountyActionsService.ts  # Database operations
-│   ├── googleSheetsService.ts   # Google Sheets integration (optional)
-│   └── supabaseClient.ts        # Supabase client
-├── utils/
-│   └── databaseTest.ts          # Database testing utilities
-└── ...
+
+## Development
+
+### Prerequisites
+- Node.js 16+
+- npm or yarn
+- Supabase account and project
+
+### Installation
+```bash
+npm install
+npm start
 ```
+
+### Database Setup
+Run the SQL scripts in `database_setup.sql` to create the required tables and indexes.
+
+## Architecture
+
+### Components
+- `AIBountiesModal`: Main AI bounties management interface
+- `AIBountiesTab`: Alternative AI bounties interface
+- `BountyPromptsTable`: JSON prompt management
+- `BountiesTable`: Main bounties display and management
+
+### Services
+- `AIBountiesService`: AI bounty operations and cleanup
+- `BountyActionsService`: Bounty action management
+- `GoogleSheetsService`: Google Sheets integration
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Test thoroughly
+4. Add tests if applicable
 5. Submit a pull request
 
 ## License

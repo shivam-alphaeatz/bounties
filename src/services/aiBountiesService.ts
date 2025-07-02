@@ -343,4 +343,55 @@ export class AIBountiesService {
       throw error;
     }
   }
+
+  // Cleanup all pending bounties (no time filter)
+  static async cleanupAllPendingBounties(): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('bounty_selection_history')
+        .delete()
+        .eq('action', 'pending');
+
+      if (error) {
+        console.error('Error cleaning up all pending bounties:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Failed to cleanup all pending bounties:', error);
+      throw error;
+    }
+  }
+
+  // Get count of pending bounties by age
+  static async getPendingBountyCounts(): Promise<{ total: number; old: number; recent: number }> {
+    try {
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      
+      // Get total pending count
+      const { data: totalData, error: totalError } = await supabase
+        .from('bounty_selection_history')
+        .select('id')
+        .eq('action', 'pending');
+
+      if (totalError) throw totalError;
+
+      // Get old pending count (older than 24 hours)
+      const { data: oldData, error: oldError } = await supabase
+        .from('bounty_selection_history')
+        .select('id')
+        .eq('action', 'pending')
+        .lt('created_at', twentyFourHoursAgo);
+
+      if (oldError) throw oldError;
+
+      const total = totalData?.length || 0;
+      const old = oldData?.length || 0;
+      const recent = total - old;
+
+      return { total, old, recent };
+    } catch (error) {
+      console.error('Failed to get pending bounty counts:', error);
+      throw error;
+    }
+  }
 } 

@@ -55,18 +55,80 @@
   background-color: #1976D2;
 }
 
-.cleanup-button {
-  background-color: #ff9800;
-  color: white;
+/* Cleanup Dropdown Styles */
+.cleanup-dropdown {
+  position: relative;
+  display: inline-block;
 }
 
-.cleanup-button:hover:not(:disabled) {
+.cleanup-dropdown-button {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  background-color: #ff9800;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cleanup-dropdown-button:hover:not(:disabled) {
   background-color: #f57c00;
 }
 
+.cleanup-dropdown-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cleanup-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  z-index: 1000;
+  border: 1px solid #e0e0e0;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.cleanup-dropdown-menu .dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.cleanup-dropdown-menu .dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.cleanup-dropdown-menu .dropdown-item:hover {
+  background: #f8f9fa;
+  color: #000;
+}
+
+.cleanup-dropdown-menu .dropdown-item:active {
+  background: #e9ecef;
+}
+
 .generate-button:disabled,
-.submit-button:disabled,
-.cleanup-button:disabled {
+.submit-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

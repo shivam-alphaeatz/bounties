@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './AIBountiesModal.css';
 import { BountyActionsService, BountyAction } from '../services/bountyActionsService';
 import { supabase } from '../supabaseClient';
+import { AIBountiesService } from '../services/aiBountiesService';
 
 interface Bounty {
   bucket_id: number;
@@ -114,6 +115,12 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
   const optionsButtonRef = useRef<HTMLButtonElement>(null);
 
+  // Cleanup dropdown state
+  const [showCleanupDropdown, setShowCleanupDropdown] = useState(false);
+  const [cleanupDropdownPosition, setCleanupDropdownPosition] = useState({ top: 0, right: 0 });
+  const cleanupButtonRef = useRef<HTMLButtonElement>(null);
+  const [pendingCounts, setPendingCounts] = useState({ total: 0, old: 0, recent: 0 });
+
   // Cache keys for localStorage
   const CACHE_KEYS = {
     BOUNTIES: 'ai_bounties_cache',
@@ -151,19 +158,34 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
   const calculateDropdownPosition = () => {
     if (optionsButtonRef.current) {
       const rect = optionsButtonRef.current.getBoundingClientRect();
-      const top = rect.bottom + 8; // 8px gap
-      const right = window.innerWidth - rect.right;
-      setDropdownPosition({ top, right });
-      console.log('Dropdown position calculated:', { top, right, rect });
+      setDropdownPosition({
+        top: rect.bottom + 5,
+        right: window.innerWidth - rect.right
+      });
+    }
+  };
+
+  const calculateCleanupDropdownPosition = () => {
+    if (cleanupButtonRef.current) {
+      const rect = cleanupButtonRef.current.getBoundingClientRect();
+      setCleanupDropdownPosition({
+        top: rect.bottom + 5,
+        right: window.innerWidth - rect.right
+      });
     }
   };
 
   // Function to handle options button click
   const handleOptionsButtonClick = () => {
-    if (!showOptionsDropdown) {
-      calculateDropdownPosition();
-    }
+    calculateDropdownPosition();
     setShowOptionsDropdown(!showOptionsDropdown);
+    setShowCleanupDropdown(false); // Close cleanup dropdown if open
+  };
+
+  const handleCleanupButtonClick = () => {
+    calculateCleanupDropdownPosition();
+    setShowCleanupDropdown(!showCleanupDropdown);
+    setShowOptionsDropdown(false); // Close options dropdown if open
   };
 
   // Cache management functions
@@ -514,65 +536,52 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
 
   // Load saved actions and update pending counts on mount
   useEffect(() => {
+    fetchBounties(null);
+    loadSavedActions();
+    updatePendingCounts();
+    fetchPendingCounts(); // Fetch pending counts on mount
+  }, [selectedBountyType]);
+
+  useEffect(() => {
     if (isOpen) {
-      console.log('AIBountiesModal: Modal opened, loading cached data and fetching bounties if needed');
-      
-      // Load refresh counts from cache
-      const cachedRefreshCounts = loadRefreshCountsFromCache();
-      setRefreshCounts(cachedRefreshCounts);
-      
-      // Load saved actions
-      loadSavedActions();
-      
-      // Fetch bounties (will use cache if available)
-      fetchBounties(null, false);
-      updatePendingCounts();
-    } else {
-      console.log('AIBountiesModal: Modal closed');
-    }
-  }, [isOpen, fetchBounties]);
+      const handleClickOutside = (event: MouseEvent) => {
+        const target = event.target as Element;
+        
+        // Close options dropdown if clicking outside
+        if (showOptionsDropdown && optionsButtonRef.current && !optionsButtonRef.current.contains(target)) {
+          const dropdownMenu = document.querySelector('.options-dropdown-menu');
+          if (dropdownMenu && !dropdownMenu.contains(target)) {
+            setShowOptionsDropdown(false);
+          }
+        }
+        
+        // Close cleanup dropdown if clicking outside
+        if (showCleanupDropdown && cleanupButtonRef.current && !cleanupButtonRef.current.contains(target)) {
+          const dropdownMenu = document.querySelector('.cleanup-dropdown-menu');
+          if (dropdownMenu && !dropdownMenu.contains(target)) {
+            setShowCleanupDropdown(false);
+          }
+        }
+      };
 
-  // Update pending counts when bountyActions change
-  useEffect(() => {
-    updatePendingCounts();
-  }, [bountyActions]);
+      const handleResize = () => {
+        if (showOptionsDropdown) {
+          calculateDropdownPosition();
+        }
+        if (showCleanupDropdown) {
+          calculateCleanupDropdownPosition();
+        }
+      };
 
-  // Update pending counts on mount
-  useEffect(() => {
-    updatePendingCounts();
-  }, []);
-
-  // Handle clicking outside dropdown to close it
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Element;
-      if (showOptionsDropdown && !target.closest('.options-dropdown')) {
-        setShowOptionsDropdown(false);
-      }
-    };
-
-    if (showOptionsDropdown) {
       document.addEventListener('mousedown', handleClickOutside);
+      window.addEventListener('resize', handleResize);
+
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        window.removeEventListener('resize', handleResize);
+      };
     }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showOptionsDropdown]);
-
-  // Handle window resize to recalculate dropdown position
-  useEffect(() => {
-    const handleResize = () => {
-      if (showOptionsDropdown) {
-        calculateDropdownPosition();
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [showOptionsDropdown]);
+  }, [isOpen, showOptionsDropdown, showCleanupDropdown]);
 
   // Function to reset refresh limits for all categories
   const resetRefreshLimits = () => {
@@ -1328,6 +1337,68 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
     }
   };
 
+  // Function to fetch pending bounty counts
+  const fetchPendingCounts = async () => {
+    try {
+      const counts = await AIBountiesService.getPendingBountyCounts();
+      setPendingCounts(counts);
+    } catch (error) {
+      console.error('Error fetching pending counts:', error);
+    }
+  };
+
+  // Function to cleanup old pending bounties (24h+)
+  const cleanupOldPendingBounties = async () => {
+    const confirmed = window.confirm(
+      `Are you sure you want to cleanup old pending bounties?\n\n` +
+      `This will remove ${pendingCounts.old} pending bounties older than 24 hours from the database.\n\n` +
+      `This action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      setLoading(true);
+      await AIBountiesService.cleanupOldPendingBounties();
+      alert(`Successfully cleaned up ${pendingCounts.old} old pending bounties!`);
+      
+      // Refresh the current view and pending counts
+      fetchBounties(null, true);
+      fetchPendingCounts();
+    } catch (error) {
+      console.error('Error cleaning up old pending bounties:', error);
+      alert('Error cleaning up old pending bounties. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Function to cleanup all pending bounties
+  const cleanupAllPendingBounties = async () => {
+    const confirmed = window.confirm(
+      `Are you sure you want to cleanup ALL pending bounties?\n\n` +
+      `This will remove ${pendingCounts.total} pending bounties from the database (${pendingCounts.old} old + ${pendingCounts.recent} recent).\n\n` +
+      `This action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      setLoading(true);
+      await AIBountiesService.cleanupAllPendingBounties();
+      alert(`Successfully cleaned up all ${pendingCounts.total} pending bounties!`);
+      
+      // Refresh the current view and pending counts
+      fetchBounties(null, true);
+      fetchPendingCounts();
+    } catch (error) {
+      console.error('Error cleaning up all pending bounties:', error);
+      alert('Error cleaning up all pending bounties. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <>
       {isOpen && (
@@ -1371,6 +1442,46 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
                     <span className="toggle-text">Show Processed</span>
                   </label>
                 </div>
+                <div className="cleanup-dropdown">
+                  <button
+                    ref={cleanupButtonRef}
+                    className="cleanup-dropdown-button"
+                    onClick={handleCleanupButtonClick}
+                    title="Cleanup pending bounties options"
+                  >
+                    🧹 Cleanup ({pendingCounts.total})
+                  </button>
+                  {showCleanupDropdown && (
+                    <div 
+                      className="cleanup-dropdown-menu"
+                      style={{
+                        top: `${cleanupDropdownPosition.top}px`,
+                        right: `${cleanupDropdownPosition.right}px`
+                      }}
+                    >
+                      <button 
+                        className="dropdown-item"
+                        onClick={() => {
+                          cleanupOldPendingBounties();
+                          setShowCleanupDropdown(false);
+                        }}
+                        title="Remove pending bounties older than 24 hours"
+                      >
+                        🕐 Cleanup Old ({pendingCounts.old})
+                      </button>
+                      <button 
+                        className="dropdown-item"
+                        onClick={() => {
+                          cleanupAllPendingBounties();
+                          setShowCleanupDropdown(false);
+                        }}
+                        title="Remove all pending bounties"
+                      >
+                        🗑️ Cleanup All ({pendingCounts.total})
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <div className="options-dropdown">
                   <button 
                     ref={optionsButtonRef}
@@ -1408,6 +1519,7 @@ const AIBountiesModal: React.FC<AIBountiesModalProps> = ({ isOpen, onClose }) =>
                       >
                         🔄 Force Refresh
                       </button>
+
                       <button 
                         className="dropdown-item"
                         onClick={() => {
