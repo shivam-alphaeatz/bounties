@@ -35,7 +35,7 @@ export interface BountyToBeSubmitted {
 
 export class AIBountiesService {
   // Step A: AI Generation Function (runs independently) -> Step B: Insert into bounty_selection_history (status: pending)
-  static async insertPendingBounties(bounties: PendingBounty[]): Promise<void> {
+  static async insertPendingBounties(bounties: PendingBounty[]): Promise<{ inserted: number; duplicates: number; total: number }> {
     try {
       // Check for existing bounties to prevent duplicates
       const existingBounties = await supabase
@@ -68,9 +68,11 @@ export class AIBountiesService {
         return !isDuplicate;
       });
 
+      const duplicates = bounties.length - uniqueBounties.length;
+
       if (uniqueBounties.length === 0) {
         console.log('All bounties already exist, skipping insertion');
-        return;
+        return { inserted: 0, duplicates, total: bounties.length };
       }
 
       console.log(`Inserting ${uniqueBounties.length} unique bounties (filtered from ${bounties.length} total)`);
@@ -92,6 +94,8 @@ export class AIBountiesService {
         console.error('Error inserting pending bounties:', error);
         throw error;
       }
+
+      return { inserted: uniqueBounties.length, duplicates, total: bounties.length };
     } catch (error) {
       console.error('Failed to insert pending bounties:', error);
       throw error;

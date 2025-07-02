@@ -188,6 +188,7 @@ const AIBountiesTab: React.FC = () => {
       );
       setApprovalModal({ isOpen: false, bounty: null, date: '', notes: '' });
       await fetchData(); // Refresh data
+      setError(null); // Clear any previous errors
     } catch (err) {
       console.error('Error approving bounty:', err);
       setError('Failed to approve bounty. Please try again.');
@@ -216,6 +217,7 @@ const AIBountiesTab: React.FC = () => {
       await AIBountiesService.rejectBounty(rejectionModal.bounty.id, rejectionModal.notes);
       setRejectionModal({ isOpen: false, bounty: null, notes: '' });
       await fetchData(); // Refresh data
+      setError(null); // Clear any previous errors
     } catch (err) {
       console.error('Error rejecting bounty:', err);
       setError('Failed to reject bounty. Please try again.');
@@ -304,6 +306,8 @@ const AIBountiesTab: React.FC = () => {
       
       if (successCount > 0) {
         setSubmissionModal(prev => ({ ...prev, isOpen: false, loading: false }));
+        await fetchData(); // Refresh data to show updated state
+        setError(null); // Clear any previous errors
         alert(`Successfully submitted ${successCount} bounties to the main table!${errorCount > 0 ? ` ${errorCount} bounties failed.` : ''}`);
       } else {
         setError('No bounties were submitted successfully.');
@@ -334,6 +338,7 @@ const AIBountiesTab: React.FC = () => {
     try {
       await AIBountiesService.cleanupOldPendingBounties();
       await fetchData(); // Refresh data
+      setError(null); // Clear any previous errors
       alert('Old pending bounties cleaned up successfully!');
     } catch (err) {
       console.error('Error cleaning up old bounties:', err);
@@ -354,6 +359,7 @@ const AIBountiesTab: React.FC = () => {
     try {
       await AIBountiesService.cleanupAllPendingBounties();
       await fetchData(); // Refresh data
+      setError(null); // Clear any previous errors
       alert(`Successfully cleaned up all ${pendingCounts.total} pending bounties!`);
     } catch (err) {
       console.error('Error cleaning up all bounties:', err);
@@ -375,12 +381,26 @@ const AIBountiesTab: React.FC = () => {
       setError(null);
 
       // Generate bounties for all categories
-      await AIBountyGenerator.generateAllCategoriesBounties('daily', 2);
+      const result = await AIBountyGenerator.generateAllCategoriesBounties('daily', 2);
       
-      // Refresh data to show new bounties
+      // Always refresh data to show current state, regardless of duplicates
       await fetchData();
       
-      alert('New bounties generated successfully!');
+      // Clear any previous errors since we successfully completed the operation
+      setError(null);
+      
+      // Provide appropriate feedback based on results
+      if (result.inserted > 0) {
+        if (result.duplicates > 0) {
+          alert(`Successfully generated ${result.inserted} new bounties! (${result.duplicates} duplicates were filtered out)`);
+        } else {
+          alert(`Successfully generated ${result.inserted} new bounties!`);
+        }
+      } else if (result.duplicates > 0) {
+        alert(`All ${result.duplicates} generated bounties were duplicates. The page has been refreshed to show current data.`);
+      } else {
+        alert('No bounties were generated. Please try again.');
+      }
     } catch (err) {
       console.error('Error generating bounties:', err);
       setError('Failed to generate new bounties. Please try again.');
@@ -403,13 +423,28 @@ const AIBountiesTab: React.FC = () => {
       setGenerating(true);
       setError(null);
 
-      await AIBountyGenerator.generateCategoryBounties(categoryId, type, 3);
+      const result = await AIBountyGenerator.generateCategoryBounties(categoryId, type, 3);
       
-      // Refresh data to show new bounties
+      // Always refresh data to show current state, regardless of duplicates
       await fetchData();
       
+      // Clear any previous errors since we successfully completed the operation
+      setError(null);
+      
       const categoryName = AIBountyGenerator.getCategoryName(categoryId);
-      alert(`New ${type} bounties generated for ${categoryName}!`);
+      
+      // Provide appropriate feedback based on results
+      if (result.inserted > 0) {
+        if (result.duplicates > 0) {
+          alert(`Successfully generated ${result.inserted} new ${type} bounties for ${categoryName}! (${result.duplicates} duplicates were filtered out)`);
+        } else {
+          alert(`Successfully generated ${result.inserted} new ${type} bounties for ${categoryName}!`);
+        }
+      } else if (result.duplicates > 0) {
+        alert(`All ${result.duplicates} generated ${type} bounties for ${categoryName} were duplicates. The page has been refreshed to show current data.`);
+      } else {
+        alert(`No ${type} bounties were generated for ${categoryName}. Please try again.`);
+      }
     } catch (err) {
       console.error('Error generating category bounties:', err);
       setError('Failed to generate new bounties. Please try again.');
