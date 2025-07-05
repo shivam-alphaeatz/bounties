@@ -737,16 +737,24 @@ tr:hover td {
 .filter-container {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .filter-container label {
   font-weight: 600;
   color: #555;
   margin: 0;
+  white-space: nowrap;
 }
 
-.type-filter {
+.type-filter, .date-filter {
   padding: 8px 12px;
   border: 1px solid #ddd;
   border-radius: 4px;
@@ -757,14 +765,31 @@ tr:hover td {
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.type-filter:hover {
+.type-filter:hover, .date-filter:hover {
   border-color: #bbb;
 }
 
-.type-filter:focus {
+.type-filter:focus, .date-filter:focus {
   outline: none;
   border-color: #4a90e2;
   box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+.clear-filters-btn {
+  padding: 6px 12px;
+  background-color: #f5f5f5;
+  color: #666;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.clear-filters-btn:hover {
+  background-color: #e9e9e9;
+  color: #333;
 }
 
 /* Responsive adjustments for filter */

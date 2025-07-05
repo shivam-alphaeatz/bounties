@@ -32,6 +32,7 @@ const BountiesTable: React.FC = () => {
   const [showForm, setShowForm] = useState<boolean>(false);
   const [editingBounty, setEditingBounty] = useState<Bounty | undefined>(undefined);
   const [filterType, setFilterType] = useState<string>('all');
+  const [filterDate, setFilterDate] = useState<string>('');
 
   const fetchBounties = async () => {
     try {
@@ -131,10 +132,21 @@ const BountiesTable: React.FC = () => {
     setFilterType(e.target.value);
   };
 
-  // Filter bounties based on selected type
-  const filteredBounties = filterType === 'all' 
-    ? bounties 
-    : bounties.filter(bounty => bounty.type === filterType);
+  const handleDateFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilterDate(e.target.value);
+  };
+
+  const clearFilters = () => {
+    setFilterType('all');
+    setFilterDate('');
+  };
+
+  // Filter bounties based on selected type and date
+  const filteredBounties = bounties.filter(bounty => {
+    const matchesType = filterType === 'all' || bounty.type === filterType;
+    const matchesDate = !filterDate || bounty.date === filterDate;
+    return matchesType && matchesDate;
+  });
 
   if (loading && !showForm) return <div className="loading">Loading bounties...</div>;
   if (error && !showForm) return <div className="error">{error}</div>;
@@ -157,18 +169,39 @@ const BountiesTable: React.FC = () => {
         <h2>Bounties</h2>
         <div className="table-actions">
           <div className="filter-container">
-            <label htmlFor="type-filter">Filter by Type:</label>
-            <select 
-              id="type-filter" 
-              value={filterType} 
-              onChange={handleFilterChange}
-              className="type-filter"
-            >
-              <option value="all">All Types</option>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="yearly">Yearly</option>
-            </select>
+            <div className="filter-group">
+              <label htmlFor="type-filter">Filter by Type:</label>
+              <select 
+                id="type-filter" 
+                value={filterType} 
+                onChange={handleFilterChange}
+                className="type-filter"
+              >
+                <option value="all">All Types</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="yearly">Yearly</option>
+              </select>
+            </div>
+            <div className="filter-group">
+              <label htmlFor="date-filter">Filter by Date:</label>
+              <input
+                type="date"
+                id="date-filter"
+                value={filterDate}
+                onChange={handleDateFilterChange}
+                className="date-filter"
+              />
+            </div>
+            {(filterType !== 'all' || filterDate) && (
+              <button 
+                onClick={clearFilters}
+                className="clear-filters-btn"
+                title="Clear all filters"
+              >
+                Clear Filters
+              </button>
+            )}
           </div>
           <button className="add-button" onClick={handleAddClick}>
             <span className="button-icon">+</span> Add New Bounty
@@ -177,7 +210,11 @@ const BountiesTable: React.FC = () => {
       </div>
       {filteredBounties.length === 0 ? (
         <div className="no-data-message">
-          <p>No bounties found. {filterType !== 'all' ? 'Try changing the filter or ' : ''}Click "Add New Bounty" to create one.</p>
+          <p>
+            No bounties found. 
+            {(filterType !== 'all' || filterDate) ? ' Try changing the filters or ' : ''}
+            Click "Add New Bounty" to create one.
+          </p>
         </div>
       ) : (
         <div className="table-container">

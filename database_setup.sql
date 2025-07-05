@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS bounty_selection_history (
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     notes TEXT,
     type TEXT DEFAULT 'daily',
+    rating INTEGER CHECK (rating IS NULL OR (rating >= 0 AND rating <= 10)),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -72,6 +73,7 @@ COMMENT ON COLUMN bounty_selection_history.action IS 'Status: pending, approved,
 COMMENT ON COLUMN bounty_selection_history.timestamp IS 'When the action was taken';
 COMMENT ON COLUMN bounty_selection_history.notes IS 'Optional notes or rejection reason';
 COMMENT ON COLUMN bounty_selection_history.type IS 'The type of bounty (daily, weekly, yearly)';
+COMMENT ON COLUMN bounty_selection_history.rating IS 'Rating of the bounty (1-9 scale)';
 
 COMMENT ON TABLE bounty_actions IS 'Legacy table - Stores user actions (approve/reject) on AI-generated bounties';
 COMMENT ON COLUMN bounty_actions.bucket_id IS 'The bucket/category ID from the AI response';

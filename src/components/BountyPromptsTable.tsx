@@ -37,6 +37,8 @@ const BountyPromptsTable: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [filterBucket, setFilterBucket] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [editMode, setEditMode] = useState<'fields' | 'raw'>('fields');
+  const [rawJsonText, setRawJsonText] = useState('');
 
   useEffect(() => {
     fetchPrompts();
@@ -93,7 +95,31 @@ const BountyPromptsTable: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const jsonString = convertFieldsToJson(jsonFields);
+      let jsonString: string;
+      
+      if (editMode === 'fields') {
+        // In fields mode, use the raw JSON text if available, otherwise convert from fields
+        if (rawJsonText && rawJsonText.trim()) {
+          try {
+            JSON.parse(rawJsonText);
+            jsonString = rawJsonText;
+          } catch (parseError) {
+            setError('Invalid JSON format in the JSON Editor. Please check your syntax.');
+            return;
+          }
+        } else {
+          jsonString = convertFieldsToJson(jsonFields);
+        }
+      } else {
+        // Validate raw JSON
+        try {
+          JSON.parse(rawJsonText);
+          jsonString = rawJsonText;
+        } catch (parseError) {
+          setError('Invalid JSON format. Please check your syntax.');
+          return;
+        }
+      }
       
       if (editingPrompt) {
         // Update existing prompt
@@ -122,8 +148,10 @@ const BountyPromptsTable: React.FC = () => {
 
       setFormData({ bucket_id: '', type: '', prompt: '' });
       setJsonFields([]);
+      setRawJsonText('');
       setEditingPrompt(null);
       setIsFormOpen(false);
+      setEditMode('fields');
       fetchPrompts();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save prompt');
@@ -154,7 +182,9 @@ const BountyPromptsTable: React.FC = () => {
       prompt: prompt.prompt
     });
     setJsonFields(parseJsonToFields(prompt.prompt));
+    setRawJsonText(prompt.prompt);
     setIsFormOpen(true);
+    setEditMode('fields');
   };
 
   const handleView = (prompt: BountyPrompt) => {
@@ -166,6 +196,8 @@ const BountyPromptsTable: React.FC = () => {
     setEditingPrompt(null);
     setFormData({ bucket_id: '', type: '', prompt: '' });
     setJsonFields([]);
+    setRawJsonText('');
+    setEditMode('fields');
   };
 
   const closeView = () => {
@@ -240,6 +272,7 @@ const BountyPromptsTable: React.FC = () => {
           onClick={() => {
             setIsFormOpen(true);
             setJsonFields([{ key: '', value: '' }]);
+            setRawJsonText('{\n  \n}');
           }}
         >
           Add New Prompt
@@ -359,48 +392,153 @@ const BountyPromptsTable: React.FC = () => {
                 />
               </div>
               <div className="form-group">
-                <label>JSON Fields:</label>
-                <div className="json-fields-container">
-                  {jsonFields.map((field, index) => (
-                    <div key={index} className="json-field-row">
-                      <input
-                        type="text"
-                        placeholder="Key"
-                        value={field.key}
-                        onChange={(e) => updateJsonField(index, 'key', e.target.value)}
-                        className="field-key-input"
-                      />
-                      <textarea
-                        placeholder="Value"
-                        value={field.value}
-                        onChange={(e) => updateJsonField(index, 'value', e.target.value)}
-                        rows={2}
-                        className="field-value-input"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeJsonField(index)}
-                        className="remove-field-btn"
-                        title="Remove field"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
+                <label>Prompt Content:</label>
+                <div className="edit-mode-toggle">
                   <button
                     type="button"
-                    onClick={addJsonField}
-                    className="add-field-btn"
+                    className={`toggle-btn ${editMode === 'fields' ? 'active' : ''}`}
+                    onClick={() => setEditMode('fields')}
                   >
-                    + Add Field
+                    JSON Fields
+                  </button>
+                  <button
+                    type="button"
+                    className={`toggle-btn ${editMode === 'raw' ? 'active' : ''}`}
+                    onClick={() => setEditMode('raw')}
+                  >
+                    Raw JSON
                   </button>
                 </div>
-                <div className="json-preview">
-                  <label>JSON Preview:</label>
-                  <pre className="json-preview-content">
-                    {convertFieldsToJson(jsonFields)}
-                  </pre>
-                </div>
+                
+                {editMode === 'fields' ? (
+                  <div className="json-fields-container">
+                    {jsonFields.map((field, index) => (
+                      <div key={index} className="json-field-row">
+                        <input
+                          type="text"
+                          placeholder="Key"
+                          value={field.key}
+                          onChange={(e) => updateJsonField(index, 'key', e.target.value)}
+                          className="field-key-input"
+                        />
+                        <textarea
+                          placeholder="Value"
+                          value={field.value}
+                          onChange={(e) => updateJsonField(index, 'value', e.target.value)}
+                          rows={2}
+                          className="field-value-input"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeJsonField(index)}
+                          className="remove-field-btn"
+                          title="Remove field"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={addJsonField}
+                      className="add-field-btn"
+                    >
+                      + Add Field
+                    </button>
+                    <div className="json-preview">
+                      <label htmlFor="json-preview-textarea">JSON Editor:</label>
+                      <textarea
+                        id="json-preview-textarea"
+                        className="json-preview-textarea"
+                        value={(() => {
+                          // Use a separate state for the JSON editor content
+                          try {
+                            return JSON.stringify(JSON.parse(rawJsonText || convertFieldsToJson(jsonFields)), null, 2);
+                          } catch {
+                            return rawJsonText || convertFieldsToJson(jsonFields);
+                          }
+                        })()}
+                        onChange={(e) => {
+                          // Update the raw JSON text independently
+                          setRawJsonText(e.target.value);
+                        }}
+                        onKeyDown={(e) => {
+                          // Prevent Ctrl+A from selecting the whole page
+                          if (e.ctrlKey && e.key === 'a') {
+                            e.preventDefault();
+                            e.currentTarget.select();
+                          }
+                        }}
+                        rows={12}
+                        placeholder="Edit JSON directly here with complete freedom..."
+                      />
+                      <div className="json-validation">
+                        {(() => {
+                          try {
+                            JSON.parse(rawJsonText || convertFieldsToJson(jsonFields));
+                            return <span className="valid-json">✓ Valid JSON</span>;
+                          } catch {
+                            return <span className="invalid-json">✗ Invalid JSON</span>;
+                          }
+                        })()}
+                      </div>
+                      <div className="json-editor-actions">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Sync from fields to JSON editor
+                            setRawJsonText(convertFieldsToJson(jsonFields));
+                          }}
+                          className="sync-btn"
+                        >
+                          Sync from Fields
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Sync from JSON editor to fields
+                            try {
+                              const parsed = JSON.parse(rawJsonText);
+                              const newFields: JsonField[] = [];
+                              Object.entries(parsed).forEach(([key, value]) => {
+                                newFields.push({
+                                  key,
+                                  value: typeof value === 'string' ? value : JSON.stringify(value)
+                                });
+                              });
+                              setJsonFields(newFields);
+                            } catch (error) {
+                              alert('Invalid JSON format. Please fix the JSON before syncing to fields.');
+                            }
+                          }}
+                          className="sync-btn"
+                        >
+                          Sync to Fields
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="raw-json-container">
+                    <textarea
+                      value={rawJsonText}
+                      onChange={(e) => setRawJsonText(e.target.value)}
+                      placeholder="Enter JSON content here..."
+                      className="raw-json-textarea"
+                      rows={15}
+                    />
+                    <div className="json-validation">
+                      {(() => {
+                        try {
+                          JSON.parse(rawJsonText);
+                          return <span className="valid-json">✓ Valid JSON</span>;
+                        } catch {
+                          return <span className="invalid-json">✗ Invalid JSON</span>;
+                        }
+                      })()}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="form-actions">
                 <button type="submit" className="save-btn">
@@ -424,25 +562,30 @@ const BountyPromptsTable: React.FC = () => {
               <button onClick={closeView} className="close-btn">&times;</button>
             </div>
             <div className="prompt-view">
-                              <div className="view-group">
-                  <label>Bucket:</label>
-                  <span>{getBucketName(viewingPrompt.bucket_id)}</span>
-                </div>
+              <div className="view-group">
+                <label>Bucket:</label>
+                <span>{getBucketName(viewingPrompt.bucket_id)}</span>
+              </div>
               <div className="view-group">
                 <label>Type:</label>
                 <span>{viewingPrompt.type}</span>
               </div>
               <div className="view-group">
-                <label>Prompt:</label>
-                <pre className="json-display">
-                  {(() => {
+                <label htmlFor="prompt-display">Prompt:</label>
+                <textarea
+                  id="prompt-display"
+                  className="json-display-textarea"
+                  value={(() => {
                     try {
                       return JSON.stringify(JSON.parse(viewingPrompt.prompt), null, 2);
                     } catch {
                       return viewingPrompt.prompt;
                     }
                   })()}
-                </pre>
+                  readOnly
+                  rows={15}
+                  aria-label="Prompt content (read-only)"
+                />
               </div>
               <div className="view-group">
                 <label>Created:</label>

@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import './App.css';
 import BountiesTable from './components/BountiesTable';
-import BountyBucketWeightTable from './components/BountyBucketWeightTable';
-import RawBountyBucketWeightTable from './components/RawBountyBucketWeightTable';
 import AIBountiesTab from './components/AIBountiesTab';
 import BountyPromptsTable from './components/BountyPromptsTable';
+import AcceptedBountiesTab from './components/AcceptedBountiesTab';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'bounties' | 'categories' | 'raw' | 'ai-bounties' | 'prompts'>('bounties');
+  const [activeTab, setActiveTab] = useState<'bounties' | 'ai-bounties' | 'prompts' | 'accepted-bounties'>('bounties');
 
   return (
     <div className="App">
@@ -23,22 +22,16 @@ function App() {
             Bounties
           </button>
           <button 
-            className={`tab-button ${activeTab === 'categories' ? 'active' : ''}`}
-            onClick={() => setActiveTab('categories')}
-          >
-            Bounties with Categories
-          </button>
-          <button 
-            className={`tab-button ${activeTab === 'raw' ? 'active' : ''}`}
-            onClick={() => setActiveTab('raw')}
-          >
-            Raw Bucket Weight Data
-          </button>
-          <button 
             className={`tab-button ${activeTab === 'ai-bounties' ? 'active' : ''}`}
             onClick={() => setActiveTab('ai-bounties')}
           >
             AI Bounties
+          </button>
+          <button 
+            className={`tab-button ${activeTab === 'accepted-bounties' ? 'active' : ''}`}
+            onClick={() => setActiveTab('accepted-bounties')}
+          >
+            Accepted Bounties
           </button>
           <button 
             className={`tab-button ${activeTab === 'prompts' ? 'active' : ''}`}
@@ -50,9 +43,8 @@ function App() {
         
         <div className="tab-content">
           {activeTab === 'bounties' && <BountiesTable />}
-          {activeTab === 'categories' && <BountyBucketWeightTable />}
-          {activeTab === 'raw' && <RawBountyBucketWeightTable />}
-          {activeTab === 'ai-bounties' && <AIBountiesTab />}
+          {activeTab === 'ai-bounties' && <AIBountiesTab onNavigateToAcceptedBounties={() => setActiveTab('accepted-bounties')} />}
+          {activeTab === 'accepted-bounties' && <AcceptedBountiesTab />}
           {activeTab === 'prompts' && <BountyPromptsTable />}
         </div>
       </main>

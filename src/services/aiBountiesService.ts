@@ -10,6 +10,7 @@ export interface AIBounty {
   created_at: string;
   date?: string;
   notes?: string;
+  rating?: number;
 }
 
 export interface PendingBounty {
@@ -127,15 +128,23 @@ export class AIBountiesService {
   }
 
   // Step D: Admin Reviews -> Step E: Update status = 'accepted'
-  static async approveBounty(bountyId: string, date: string, notes?: string): Promise<void> {
+  static async approveBounty(bountyId: string, date: string, notes?: string, rating?: number | null): Promise<void> {
     try {
+      const updateData: any = {
+        action: 'accepted',
+        date: date,
+        notes: notes
+      };
+      
+      if (rating !== undefined && rating !== null && rating > 0 && rating < 10) {
+        updateData.rating = rating;
+      } else if (rating === null) {
+        updateData.rating = null;
+      }
+
       const { error } = await supabase
         .from('bounty_selection_history')
-        .update({
-          action: 'accepted',
-          date: date,
-          notes: notes
-        })
+        .update(updateData)
         .eq('id', bountyId);
 
       if (error) {
@@ -149,14 +158,22 @@ export class AIBountiesService {
   }
 
   // Step D: Admin Reviews -> Step F: Update status = 'rejected'
-  static async rejectBounty(bountyId: string, notes?: string): Promise<void> {
+  static async rejectBounty(bountyId: string, notes?: string, rating?: number | null): Promise<void> {
     try {
+      const updateData: any = {
+        action: 'rejected',
+        notes: notes
+      };
+      
+      if (rating !== undefined && rating !== null && rating > 0 && rating < 10) {
+        updateData.rating = rating;
+      } else if (rating === null) {
+        updateData.rating = null;
+      }
+
       const { error } = await supabase
         .from('bounty_selection_history')
-        .update({
-          action: 'rejected',
-          notes: notes
-        })
+        .update(updateData)
         .eq('id', bountyId);
 
       if (error) {
