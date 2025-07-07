@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AIBountiesService, AIBounty } from '../services/aiBountiesService';
 import { AIBountyGenerator } from '../utils/aiBountyGenerator';
+import { supabase } from '../supabaseClient';
 import './AIBountiesTab.css';
 
 interface BountyCounts {
@@ -20,6 +21,15 @@ interface AIBountiesTabProps {
   onNavigateToAcceptedBounties: () => void;
 }
 
+interface BountyToSubmit {
+  id: string;
+  bounty: string;
+  category: string;
+  date: string;
+  expiry_timestamp: string;
+  type: string;
+}
+
 const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBounties }) => {
   const [bounties, setBounties] = useState<AIBounty[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +40,7 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
   const [pendingCounts, setPendingCounts] = useState({ total: 0, old: 0, recent: 0 });
+  const [todayApprovedCount, setTodayApprovedCount] = useState<number>(0);
   const [showCleanupDropdown, setShowCleanupDropdown] = useState(false);
   const [rejectionModal, setRejectionModal] = useState<{
     isOpen: boolean;
@@ -56,6 +67,17 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
     rating: null
   });
 
+  // Submit modal state
+  const [submitModal, setSubmitModal] = useState<{
+    isOpen: boolean;
+    bountiesToSubmit: BountyToSubmit[];
+    selectedDate: string;
+  }>({
+    isOpen: false,
+    bountiesToSubmit: [],
+    selectedDate: new Date().toISOString().split('T')[0]
+  });
+
   // Add ref to track if generation is already in progress
   const isGeneratingRef = useRef(false);
 
@@ -65,15 +87,17 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
       setLoading(true);
       setError(null);
 
-      const [bountiesData, countsData, pendingCountsData] = await Promise.all([
+      const [bountiesData, countsData, pendingCountsData, todayApprovedData] = await Promise.all([
         AIBountiesService.getAllBounties(),
         AIBountiesService.getBountyCounts(),
-        AIBountiesService.getPendingBountyCounts()
+        AIBountiesService.getPendingBountyCounts(),
+        AIBountiesService.getTodayApprovedCount()
       ]);
 
       setBounties(bountiesData);
       setBountyCounts(countsData);
       setPendingCounts(pendingCountsData);
+      setTodayApprovedCount(todayApprovedData);
     } catch (err) {
       console.error('Error fetching data:', err);
       setError('Failed to load bounties. Please try again.');
@@ -163,6 +187,7 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
       setApprovalModal({ isOpen: false, bounty: null, date: '', notes: '', rating: null });
       await fetchData(); // Refresh data
       setError(null); // Clear any previous errors
+      alert(`Bounty approved successfully! Use the "Submit Approved" button to add it to the main bounties table.`);
     } catch (err) {
       console.error('Error approving bounty:', err);
       setError('Failed to approve bounty. Please try again.');
@@ -345,6 +370,187 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
     }
   };
 
+  // Handle submit approved bounties - open modal
+  const handleSubmitApprovedBounties = () => {
+    // Get all approved bounties
+    const approvedBounties = bounties.filter(bounty => bounty.action === 'accepted');
+    
+    if (approvedBounties.length === 0) {
+      alert('No approved bounties to submit.');
+      return;
+    }
+
+    // Get today's date in YYYY-MM-DD format
+    const today = new Date();
+    const todayString = today.toISOString().split('T')[0];
+
+    // Calculate default expiry (next day 11:59 PM)
+    const defaultExpiry = new Date();
+    defaultExpiry.setDate(defaultExpiry.getDate() + 1);
+    defaultExpiry.setHours(23, 59, 0, 0);
+
+    // Filter bounties for today's date
+    const todayBounties = approvedBounties.filter(bounty => bounty.date === todayString);
+
+    // Prepare bounties for submission
+    const bountiesToSubmit: BountyToSubmit[] = todayBounties.map(bounty => ({
+      id: bounty.id,
+      bounty: bounty.bounty,
+      category: bounty.category,
+      date: todayString,
+      expiry_timestamp: defaultExpiry.toISOString(),
+      type: bounty.type
+    }));
+
+    setSubmitModal({
+      isOpen: true,
+      bountiesToSubmit,
+      selectedDate: todayString
+    });
+  };
+
+  // Handle date change in submit modal
+  const handleSubmitModalDateChange = (newDate: string) => {
+    // Filter bounties for the selected date
+    const approvedBounties = bounties.filter(bounty => 
+      bounty.action === 'accepted' && 
+      bounty.date === newDate
+    );
+    
+    if (approvedBounties.length === 0) {
+      // No bounties for this date, clear the list
+      setSubmitModal(prev => ({
+        ...prev,
+        selectedDate: newDate,
+        bountiesToSubmit: []
+      }));
+      return;
+    }
+
+    // Calculate default expiry (next day 11:59 PM)
+    const defaultExpiry = new Date();
+    defaultExpiry.setDate(defaultExpiry.getDate() + 1);
+    defaultExpiry.setHours(23, 59, 0, 0);
+
+    // Prepare bounties for submission for the selected date
+    const bountiesToSubmit: BountyToSubmit[] = approvedBounties.map(bounty => ({
+      id: bounty.id,
+      bounty: bounty.bounty,
+      category: bounty.category,
+      date: newDate,
+      expiry_timestamp: defaultExpiry.toISOString(),
+      type: bounty.type
+    }));
+
+    setSubmitModal(prev => ({
+      ...prev,
+      selectedDate: newDate,
+      bountiesToSubmit
+    }));
+  };
+
+  // Handle actual submission from modal
+  const handleSubmitFromModal = async () => {
+    try {
+      setError(null);
+      
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const bountyToSubmit of submitModal.bountiesToSubmit) {
+        try {
+          // Submit to main table
+          const { data: mainBountyData, error: insertError } = await supabase
+            .from('bounties')
+            .insert({
+              date: bountyToSubmit.date,
+              bounty: bountyToSubmit.bounty,
+              type: bountyToSubmit.type,
+              target_value: 1,
+              lifespan: 1,
+              expiry: bountyToSubmit.expiry_timestamp
+            })
+            .select();
+
+          if (insertError) {
+            console.error('Error inserting bounty to main table:', insertError);
+            errorCount++;
+            continue;
+          }
+
+          // Add category weight if bounty was inserted successfully
+          if (mainBountyData && mainBountyData.length > 0) {
+            const mainBountyId = mainBountyData[0].id;
+            
+            // Find the original bounty to get bucket_id
+            const originalBounty = bounties.find(b => b.id === bountyToSubmit.id);
+            
+            if (originalBounty) {
+              const { error: weightError } = await supabase
+                .from('bountyBucketWeight')
+                .insert({
+                  bountyId: mainBountyId,
+                  bucketId: originalBounty.bucket_id,
+                  weight: 1
+                });
+
+              if (weightError) {
+                console.error('Error saving category weight:', weightError);
+              }
+            }
+            
+            successCount++;
+          }
+        } catch (bountyError) {
+          console.error('Error processing bounty:', bountyError);
+          errorCount++;
+        }
+      }
+
+      // Update status to finalized for successfully submitted bounties
+      if (successCount > 0) {
+        const successfulBounties = submitModal.bountiesToSubmit.slice(0, successCount);
+        for (const bounty of successfulBounties) {
+          await supabase
+            .from('bounty_selection_history')
+            .update({ action: 'finalized' })
+            .eq('id', bounty.id);
+        }
+      }
+
+      // Close modal and refresh data
+      setSubmitModal({ isOpen: false, bountiesToSubmit: [], selectedDate: new Date().toISOString().split('T')[0] });
+      await fetchData();
+      
+      if (successCount > 0) {
+        alert(`Successfully submitted ${successCount} bounties to main table!${errorCount > 0 ? ` ${errorCount} bounties failed.` : ''}`);
+      } else {
+        setError('Failed to submit any bounties. Please try again.');
+      }
+    } catch (err) {
+      console.error('Error submitting bounties:', err);
+      setError('Failed to submit bounties. Please try again.');
+    }
+  };
+
+  // Update bounty in submit modal
+  const updateBountyInSubmitModal = (index: number, field: keyof BountyToSubmit, value: string) => {
+    setSubmitModal(prev => ({
+      ...prev,
+      bountiesToSubmit: prev.bountiesToSubmit.map((bounty, i) => 
+        i === index ? { ...bounty, [field]: value } : bounty
+      )
+    }));
+  };
+
+  // Remove bounty from submit modal
+  const removeBountyFromSubmitModal = (index: number) => {
+    setSubmitModal(prev => ({
+      ...prev,
+      bountiesToSubmit: prev.bountiesToSubmit.filter((_, i) => i !== index)
+    }));
+  };
+
   if (loading) {
     return (
       <div className="ai-bounties-tab">
@@ -368,10 +574,11 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
             {generating ? 'Generating...' : 'Generate All Categories'}
           </button>
           <button 
-            className="accepted-bounties-button"
-            onClick={onNavigateToAcceptedBounties}
+            className="submit-button"
+            onClick={handleSubmitApprovedBounties}
+            disabled={todayApprovedCount === 0}
           >
-            📋 Manage Accepted Bounties
+            📤 Submit Approved ({todayApprovedCount})
           </button>
           <div className="cleanup-dropdown">
             <button 
@@ -746,6 +953,94 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
                 onClick={handleApprovalConfirm}
               >
                 Confirm Approval
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Submit Modal */}
+      {submitModal.isOpen && (
+        <div className="rejection-modal-overlay">
+          <div className="rejection-modal" style={{ maxWidth: '800px', width: '95%' }}>
+            <h3>Submit Approved Bounties to Main Table</h3>
+            <div className="rejection-content">
+              <div className="submit-modal-date-selector">
+                <label htmlFor="submit-modal-date">Select Date for Approved Bounties:</label>
+                <input
+                  id="submit-modal-date"
+                  type="date"
+                  value={submitModal.selectedDate}
+                  onChange={(e) => handleSubmitModalDateChange(e.target.value)}
+                  title="Select the date for approved bounties"
+                />
+              </div>
+              
+              <p>Review and adjust the settings for each approved bounty before submitting:</p>
+              
+              <div className="bounties-to-submit">
+                {submitModal.bountiesToSubmit.map((bounty, index) => (
+                  <div key={index} className="bounty-submit-item">
+                    <div className="bounty-submit-header">
+                      <h4>{bounty.bounty}</h4>
+                      <span className="category-badge">{bounty.category}</span>
+                      <button 
+                        className="remove-bounty-button"
+                        onClick={() => removeBountyFromSubmitModal(index)}
+                        title="Remove this bounty from submission"
+                      >
+                        ✕ Remove
+                      </button>
+                    </div>
+                    <div className="bounty-submit-settings">
+                      <div className="setting-group">
+                        <label htmlFor={`date-${index}`}>Date:</label>
+                        <input
+                          id={`date-${index}`}
+                          type="date"
+                          value={bounty.date}
+                          onChange={(e) => updateBountyInSubmitModal(index, 'date', e.target.value)}
+                          title="Set the date for this bounty"
+                        />
+                      </div>
+                      <div className="setting-group">
+                        <label htmlFor={`expiry-${index}`}>Expiry:</label>
+                        <input
+                          id={`expiry-${index}`}
+                          type="datetime-local"
+                          value={bounty.expiry_timestamp.slice(0, 16)} // Format for datetime-local input
+                          onChange={(e) => {
+                            const newTimestamp = new Date(e.target.value).toISOString();
+                            updateBountyInSubmitModal(index, 'expiry_timestamp', newTimestamp);
+                          }}
+                          title="Set the expiry date and time"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {submitModal.bountiesToSubmit.length === 0 && (
+                <div className="no-bounties-message">
+                  <p>No approved bounties found for the selected date ({submitModal.selectedDate}).</p>
+                  <p>Try selecting a different date or approve some bounties first.</p>
+                </div>
+              )}
+            </div>
+            <div className="rejection-actions">
+              <button 
+                className="cancel-button"
+                onClick={() => setSubmitModal({ isOpen: false, bountiesToSubmit: [], selectedDate: new Date().toISOString().split('T')[0] })}
+              >
+                Cancel
+              </button>
+              <button 
+                className="confirm-approve-button"
+                onClick={handleSubmitFromModal}
+                disabled={submitModal.bountiesToSubmit.length === 0}
+              >
+                Submit {submitModal.bountiesToSubmit.length} Bounties
               </button>
             </div>
           </div>

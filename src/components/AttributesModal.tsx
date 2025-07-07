@@ -1,0 +1,317 @@
+import React, { useState, useEffect } from 'react';
+import { AttributesService, Attribute, BountyAttribute } from '../services/attributesService';
+import './AttributesModal.css';
+
+interface AttributesModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  bountyId: string;
+  bountyName: string;
+  mode: 'add' | 'edit';
+  onAttributesUpdated: () => void;
+}
+
+const AttributesModal: React.FC<AttributesModalProps> = ({
+  isOpen,
+  onClose,
+  bountyId,
+  bountyName,
+  mode,
+  onAttributesUpdated
+}) => {
+  const [attributes, setAttributes] = useState<Attribute[]>([]);
+  const [bountyAttributes, setBountyAttributes] = useState<BountyAttribute[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingAttribute, setEditingAttribute] = useState<BountyAttribute | null>(null);
+  const [formData, setFormData] = useState({
+    attributeId: '',
+    type: '',
+    value: 1
+  });
+
+  useEffect(() => {
+    if (isOpen) {
+      loadData();
+    }
+  }, [isOpen, bountyId]);
+
+  // Reset form state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setShowAddForm(false);
+      setEditingAttribute(null);
+    }
+  }, [isOpen]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('Loading data for bountyId:', bountyId, 'type:', typeof bountyId);
+
+      const [attributesData, bountyAttributesData] = await Promise.all([
+        AttributesService.getAttributes(),
+        AttributesService.getBountyAttributes(bountyId)
+      ]);
+
+      setAttributes(attributesData);
+      setBountyAttributes(bountyAttributesData);
+    } catch (err) {
+      console.error('Error loading data:', err);
+      setError('Failed to load attributes data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddAttribute = () => {
+    setEditingAttribute(null);
+    setFormData({
+      attributeId: '',
+      type: '',
+      value: 1
+    });
+    setShowAddForm(true);
+  };
+
+  const handleEditAttribute = (attribute: BountyAttribute) => {
+    setEditingAttribute(attribute);
+    setFormData({
+      attributeId: attribute.attribute_id,
+      type: attribute.type,
+      value: attribute.value
+    });
+    setShowAddForm(true);
+  };
+
+  const handleDeleteAttribute = async (attribute: BountyAttribute) => {
+    if (!window.confirm('Are you sure you want to delete this attribute?')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await AttributesService.deleteBountyAttribute(attribute.bounty_id, attribute.attribute_id);
+      await loadData();
+      onAttributesUpdated();
+    } catch (err) {
+      console.error('Error deleting attribute:', err);
+      setError('Failed to delete attribute');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      setLoading(true);
+      setError(null);
+
+      if (editingAttribute) {
+        // Update existing attribute
+        await AttributesService.updateBountyAttribute(
+          editingAttribute.bounty_id,
+          editingAttribute.attribute_id,
+          formData.type,
+          formData.value
+        );
+      } else {
+        // Add new attribute
+        await AttributesService.addBountyAttribute(
+          bountyId,
+          formData.attributeId,
+          formData.type,
+          formData.value
+        );
+      }
+
+      await loadData();
+      onAttributesUpdated();
+      setShowAddForm(false);
+      setEditingAttribute(null);
+    } catch (err) {
+      console.error('Error saving attribute:', err);
+      setError('Failed to save attribute');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setShowAddForm(false);
+    setEditingAttribute(null);
+    setFormData({
+      attributeId: '',
+      type: '',
+      value: 1
+    });
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="attributes-modal-overlay">
+      <div className="attributes-modal">
+        <div className={`attributes-modal-header ${mode}-mode`}>
+          <h2>{mode === 'add' ? 'Add Attributes' : 'Edit Attributes'}</h2>
+          <button className="close-button" onClick={onClose}>×</button>
+        </div>
+
+        <div className="attributes-modal-content">
+          <div className="bounty-info">
+            <h3>{bountyName}</h3>
+            <p>Bounty ID: {bountyId}</p>
+          </div>
+
+          {error && (
+            <div className="error-message">
+              {error}
+            </div>
+          )}
+
+          {loading && (
+            <div className="loading-message">
+              Loading...
+            </div>
+          )}
+
+          {!showAddForm && (
+            <div className="attributes-section">
+              <div className="section-header">
+                <h3>{mode === 'add' ? 'Add New Attributes' : 'Current Attributes'}</h3>
+                <button 
+                  className="add-button"
+                  onClick={handleAddAttribute}
+                  disabled={loading}
+                >
+                  + Add Attribute
+                </button>
+              </div>
+
+              {bountyAttributes.length === 0 ? (
+                <div className="no-attributes">
+                  <p>{mode === 'add' ? 'Ready to add attributes to this bounty.' : 'No attributes assigned to this bounty yet.'}</p>
+                  {mode === 'add' && (
+                    <button 
+                      className="add-first-button"
+                      onClick={handleAddAttribute}
+                      disabled={loading}
+                    >
+                      Add Your First Attribute
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="attributes-list">
+                  {bountyAttributes.map((attr) => (
+                    <div key={`${attr.bounty_id}-${attr.attribute_id}`} className="attribute-item">
+                      <div className="attribute-info">
+                        <span className="attribute-name">
+                          {attr.attribute?.key || 'Unknown'}
+                        </span>
+                        <span className="attribute-type">{attr.type}</span>
+                        <span className="attribute-value">{attr.value}</span>
+                      </div>
+                      <div className="attribute-actions">
+                        <button
+                          className="edit-button"
+                          onClick={() => handleEditAttribute(attr)}
+                          disabled={loading}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="delete-button"
+                          onClick={() => handleDeleteAttribute(attr)}
+                          disabled={loading}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {showAddForm && (
+            <div className="add-attribute-form">
+              <h3>{editingAttribute ? 'Edit Attribute' : (mode === 'add' ? 'Add New Attribute' : 'Add Attribute')}</h3>
+              
+              <form onSubmit={handleSubmit}>
+                <div className="form-group">
+                  <label htmlFor="attributeId">Attribute:</label>
+                  <select
+                    id="attributeId"
+                    value={formData.attributeId}
+                    onChange={(e) => setFormData({ ...formData, attributeId: e.target.value })}
+                    required
+                    disabled={editingAttribute !== null} // Can't change attribute when editing
+                  >
+                    <option value="">Select an attribute</option>
+                    {attributes.map((attr) => (
+                      <option key={attr.id} value={attr.id}>
+                        {attr.key}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="type">Type:</label>
+                  <input
+                    type="text"
+                    id="type"
+                    value={formData.type}
+                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                    placeholder="e.g., rating, score, level"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="value">Value:</label>
+                  <input
+                    type="number"
+                    id="value"
+                    value={formData.value}
+                    onChange={(e) => setFormData({ ...formData, value: parseInt(e.target.value) || 0 })}
+                    min="0"
+                    max="100"
+                    required
+                  />
+                </div>
+
+                <div className="form-actions">
+                  <button
+                    type="button"
+                    className="cancel-button"
+                    onClick={handleCancel}
+                    disabled={loading}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="save-button"
+                    disabled={loading}
+                  >
+                    {loading ? 'Saving...' : (editingAttribute ? 'Update' : 'Add')}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AttributesModal; 

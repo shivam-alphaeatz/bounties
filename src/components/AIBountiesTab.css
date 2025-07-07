@@ -510,18 +510,29 @@
 }
 
 .rejection-modal h3 {
-  margin: 0 0 20px 0;
-  color: #333;
-  font-size: 20px;
+  margin: 0 0 24px 0;
+  color: #1e293b;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  text-align: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .rejection-content {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .rejection-content p {
-  margin: 0 0 15px 0;
-  line-height: 1.5;
+  margin: 0 0 16px 0;
+  line-height: 1.6;
+  color: #475569;
+  font-size: 0.95rem;
+  text-align: center;
+  font-weight: 500;
 }
 
 .rejection-notes {
@@ -555,27 +566,35 @@
 .rejection-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 12px;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+  margin-top: 24px;
 }
 
 .cancel-button,
 .confirm-reject-button {
-  padding: 10px 16px;
+  padding: 12px 24px;
   border: none;
-  border-radius: 6px;
-  font-weight: 500;
+  border-radius: 12px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 14px;
+  transition: all 0.3s ease;
+  font-size: 0.95rem;
+  letter-spacing: -0.025em;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
 }
 
 .cancel-button {
-  background: #f5f5f5;
-  color: #333;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  color: #475569;
+  border: 2px solid #e2e8f0;
 }
 
 .cancel-button:hover {
-  background: #e0e0e0;
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 .confirm-reject-button {
@@ -593,17 +612,23 @@
 }
 
 .confirm-approve-button {
-  background: #4caf50;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
+  border: 2px solid transparent;
 }
 
 .confirm-approve-button:hover:not(:disabled) {
-  background: #45a049;
+  background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
 }
 
 .confirm-approve-button:disabled {
-  opacity: 0.6;
+  background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  opacity: 0.7;
 }
 
 /* Form styles for submit modal */
@@ -691,12 +716,26 @@
 
 .no-bounties-message {
   text-align: center;
-  padding: 20px;
-  color: #666;
+  padding: 32px 24px;
+  color: #64748b;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 16px;
+  border: 2px dashed #cbd5e1;
+  margin-top: 16px;
+}
+
+.no-bounties-message p {
+  margin: 0 0 12px 0;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #475569;
+}
+
+.no-bounties-message p:last-child {
+  margin-bottom: 0;
+  font-size: 0.9rem;
+  color: #64748b;
   font-style: italic;
-  background: #f8f9fa;
-  border-radius: 4px;
-  border: 1px dashed #dee2e6;
 }
 
 /* Responsive Design */
@@ -854,4 +893,255 @@
 .rating-number-input::-webkit-outer-spin-button {
   opacity: 1;
   height: 20px;
+}
+
+/* Submit Modal Styles */
+.submit-modal-date-selector {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 16px;
+  border: 2px solid #e2e8f0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  position: relative;
+  overflow: hidden;
+}
+
+.submit-modal-date-selector::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+}
+
+.submit-modal-date-selector label {
+  display: block;
+  margin-bottom: 12px;
+  font-weight: 700;
+  color: #1e293b;
+  font-size: 1rem;
+  letter-spacing: -0.025em;
+}
+
+.submit-modal-date-selector input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 500;
+  background: white;
+  transition: all 0.3s ease;
+  color: #1e293b;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+.submit-modal-date-selector input:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.submit-modal-date-selector input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+/* Date input specific styling */
+.submit-modal-date-selector input[type="date"] {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.submit-modal-date-selector input[type="date"]::-webkit-calendar-picker-indicator {
+  background: transparent;
+  bottom: 0;
+  color: transparent;
+  cursor: pointer;
+  height: auto;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: auto;
+}
+
+.submit-modal-date-selector input[type="date"]::-webkit-datetime-edit {
+  color: #1e293b;
+}
+
+.submit-modal-date-selector input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+}
+
+.submit-modal-date-selector input[type="date"]::-webkit-datetime-edit-text {
+  color: #64748b;
+  padding: 0 4px;
+}
+
+.submit-modal-date-selector input[type="date"]::-webkit-datetime-edit-month-field,
+.submit-modal-date-selector input[type="date"]::-webkit-datetime-edit-day-field,
+.submit-modal-date-selector input[type="date"]::-webkit-datetime-edit-year-field {
+  color: #1e293b;
+  padding: 0 2px;
+}
+
+.bounties-to-submit {
+  margin-top: 24px;
+  max-height: 350px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-right: 8px;
+}
+
+.bounties-to-submit::-webkit-scrollbar {
+  width: 8px;
+}
+
+.bounties-to-submit::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.bounties-to-submit::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%);
+  border-radius: 4px;
+}
+
+.bounties-to-submit::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
+}
+
+.bounty-submit-item {
+  background: linear-gradient(145deg, #ffffff 0%, #fafafa 100%);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.3s ease;
+}
+
+.bounty-submit-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.bounty-submit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.bounty-submit-header h4 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.1rem;
+  font-weight: 600;
+  flex: 1;
+  line-height: 1.4;
+}
+
+.category-badge {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.remove-bounty-button {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.remove-bounty-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
+
+.bounty-submit-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.setting-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.setting-group label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.setting-group input {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  transition: all 0.3s ease;
+  background: white;
+}
+
+.setting-group input[type="datetime-local"] {
+  font-family: inherit;
+  min-height: 40px;
+}
+
+.setting-group input[type="date"] {
+  font-family: inherit;
+  min-height: 40px;
+}
+
+.setting-group input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Responsive design for submit modal */
+@media (max-width: 768px) {
+  .bounty-submit-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .bounty-submit-header h4 {
+    font-size: 1rem;
+  }
+  
+  .category-badge {
+    align-self: flex-start;
+  }
+  
+  .remove-bounty-button {
+    align-self: flex-end;
+  }
+  
+  .bounty-submit-settings {
+    gap: 12px;
+  }
 } 

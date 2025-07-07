@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { bucketMap } from '../supabaseClient';
 
 export interface AIBounty {
   id: string;
@@ -27,6 +28,7 @@ export interface SubmitBountyData {
 }
 
 export interface BountyToBeSubmitted {
+  id: number;
   bounty: string;
   bucket_id: number;
   category: string;
@@ -136,21 +138,22 @@ export class AIBountiesService {
         notes: notes
       };
       
-      if (rating !== undefined && rating !== null && rating > 0 && rating < 10) {
+      if (rating !== undefined && rating !== null && rating >= 0 && rating <= 10) {
         updateData.rating = rating;
       } else if (rating === null) {
         updateData.rating = null;
       }
 
-      const { error } = await supabase
+      const { error: updateError } = await supabase
         .from('bounty_selection_history')
         .update(updateData)
         .eq('id', bountyId);
 
-      if (error) {
-        console.error('Error approving bounty:', error);
-        throw error;
+      if (updateError) {
+        console.error('Error approving bounty:', updateError);
+        throw updateError;
       }
+
     } catch (error) {
       console.error('Failed to approve bounty:', error);
       throw error;
@@ -344,6 +347,29 @@ export class AIBountiesService {
     }
   }
 
+  // Get count of today's approved bounties (for submit button)
+  static async getTodayApprovedCount(): Promise<number> {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      const { data, error } = await supabase
+        .from('bounty_selection_history')
+        .select('id')
+        .eq('action', 'accepted')
+        .eq('date', today);
+
+      if (error) {
+        console.error('Error fetching today\'s approved bounties count:', error);
+        throw error;
+      }
+
+      return data?.length || 0;
+    } catch (error) {
+      console.error('Failed to fetch today\'s approved bounties count:', error);
+      throw error;
+    }
+  }
+
   // Step K: Background Cleanup: Delete old pending
   static async cleanupOldPendingBounties(): Promise<void> {
     try {
@@ -412,6 +438,58 @@ export class AIBountiesService {
       return { total, old, recent };
     } catch (error) {
       console.error('Failed to get pending bounty counts:', error);
+      throw error;
+    }
+  }
+
+  // Get bounties from main bounties table by date
+  static async getBountiesByDate(date: string): Promise<BountyToBeSubmitted[]> {
+    try {
+      // Fetch bounties from main table for the specified date
+      const { data: bountiesData, error: bountiesError } = await supabase
+        .from('bounties')
+        .select('*')
+        .eq('date', date)
+        .order('created_at', { ascending: false });
+
+      if (bountiesError) {
+        console.error('Error fetching bounties from main table:', bountiesError);
+        throw bountiesError;
+      }
+
+      // Fetch bucket weights to get category information
+      const { data: bucketWeightsData, error: bucketWeightsError } = await supabase
+        .from('bountyBucketWeight')
+        .select('*');
+
+      if (bucketWeightsError) {
+        console.error('Error fetching bucket weights:', bucketWeightsError);
+        throw bucketWeightsError;
+      }
+
+      // Map bounties to BountyToBeSubmitted format with category information
+      const bountiesWithCategories = bountiesData.map((bounty: any) => {
+        // Find the bucket weight for this bounty
+        const bucketWeight = bucketWeightsData.find((weight: any) => weight.bountyId === bounty.id);
+        
+        // Get category name from bucketMap
+        const category = bucketWeight ? 
+          bucketMap[bucketWeight.bucketId as keyof typeof bucketMap] || 'Unknown' : 
+          'Unknown';
+
+        return {
+          id: bounty.id,
+          bounty: bounty.bounty,
+          bucket_id: bucketWeight?.bucketId || 0,
+          category: category,
+          type: bounty.type,
+          created_at: bounty.created_at
+        };
+      });
+
+      return bountiesWithCategories || [];
+    } catch (error) {
+      console.error('Failed to get bounties by date:', error);
       throw error;
     }
   }
