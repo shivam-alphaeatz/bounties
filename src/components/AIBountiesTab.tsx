@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AIBountiesService, AIBounty } from '../services/aiBountiesService';
 import { AIBountyGenerator } from '../utils/aiBountyGenerator';
+import { PushNotificationService } from '../services/pushNotificationService';
 import { supabase } from '../supabaseClient';
 import './AIBountiesTab.css';
 
@@ -523,6 +524,8 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
       await fetchData();
       
       if (successCount > 0) {
+        // Send push notification for successful submission
+        await PushNotificationService.sendBountySubmissionNotification();
         alert(`Successfully submitted ${successCount} bounties to main table!${errorCount > 0 ? ` ${errorCount} bounties failed.` : ''}`);
       } else {
         setError('Failed to submit any bounties. Please try again.');
