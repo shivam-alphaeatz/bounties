@@ -17,8 +17,8 @@ export class PushNotificationService {
 
   static async sendBountySubmissionNotification(): Promise<void> {
     const payload: PushNotificationPayload = {
-      title: "test 1",
-      body: "helooz",
+      title: "You're In! 🎯",
+      body: "Your bounty quest has begun. Keep showing up — progress starts now.",
       data: {
         type: "bounty_submission",
         deep_link: "app://bounty/active",
