@@ -7,6 +7,7 @@ interface AttributesModalProps {
   onClose: () => void;
   bountyId: string;
   bountyName: string;
+  bucketId: number;
   mode: 'add' | 'edit';
   onAttributesUpdated: () => void;
 }
@@ -16,6 +17,7 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
   onClose,
   bountyId,
   bountyName,
+  bucketId,
   mode,
   onAttributesUpdated
 }) => {
@@ -25,6 +27,7 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingAttribute, setEditingAttribute] = useState<BountyAttribute | null>(null);
+  const [generatingAttributes, setGeneratingAttributes] = useState(false);
   const [formData, setFormData] = useState({
     attributeId: '',
     type: '',
@@ -102,6 +105,44 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
       setError('Failed to delete attribute');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGenerateAttributes = async () => {
+    try {
+      setGeneratingAttributes(true);
+      setError(null);
+
+      const response = await fetch('https://nwfhqrmdjmjopbxulyhu.supabase.co/functions/v1/attributeGEN', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53Zmhxcm1kam1qb3BieHVseWh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNjc5MDMsImV4cCI6MjA2MTg0MzkwM30.NvbyIKp7BxALfO0SBpdFcbCXXhPcOJ_4YJY8HPyVlzs',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          bucket_id: bucketId,
+          bounty_id: bountyId
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Attributes generated successfully:', result);
+
+      // Reload data to show the newly generated attributes
+      await loadData();
+      onAttributesUpdated();
+      
+      // Show success message
+      alert('Attributes generated successfully!');
+    } catch (err) {
+      console.error('Error generating attributes:', err);
+      setError('Failed to generate attributes. Please try again.');
+    } finally {
+      setGeneratingAttributes(false);
     }
   };
 
@@ -197,13 +238,23 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
                 <div className="no-attributes">
                   <p>{mode === 'add' ? 'Ready to add attributes to this bounty.' : 'No attributes assigned to this bounty yet.'}</p>
                   {mode === 'add' && (
-                    <button 
-                      className="add-first-button"
-                      onClick={handleAddAttribute}
-                      disabled={loading}
-                    >
-                      Add Your First Attribute
-                    </button>
+                    <div className="add-options">
+                      <button 
+                        className="generate-button"
+                        onClick={handleGenerateAttributes}
+                        disabled={generatingAttributes || loading}
+                      >
+                        {generatingAttributes ? 'Generating...' : '🎲 Generate Attributes'}
+                      </button>
+                      <div className="or-divider">or</div>
+                      <button 
+                        className="add-first-button"
+                        onClick={handleAddAttribute}
+                        disabled={loading}
+                      >
+                        Add Manually
+                      </button>
+                    </div>
                   )}
                 </div>
               ) : (

@@ -251,6 +251,7 @@ const AcceptedBountiesTab: React.FC = () => {
           onClose={handleAttributesModalClose}
           bountyId={selectedBounty.id.toString()}
           bountyName={selectedBounty.bounty}
+          bucketId={selectedBounty.bucket_id}
           mode={modalMode}
           onAttributesUpdated={handleAttributesUpdated}
         />

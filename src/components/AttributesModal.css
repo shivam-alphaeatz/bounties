@@ -192,6 +192,53 @@
   box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
 }
 
+.add-options {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.generate-button {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  border: none;
+  padding: 16px 32px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  transition: transform 0.2s, box-shadow 0.2s;
+  min-width: 200px;
+}
+
+.generate-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(245, 158, 11, 0.4);
+}
+
+.generate-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.or-divider {
+  display: flex;
+  align-items: center;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.or-divider::before,
+.or-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #d1d5db;
+  margin: 0 12px;
+}
+
 .attributes-list {
   display: flex;
   flex-direction: column;
@@ -412,5 +459,25 @@
 
   .form-actions button {
     width: 100%;
+    margin: 8px 0;
+  }
+
+  .add-options {
+    gap: 12px;
+  }
+
+  .generate-button {
+    min-width: 180px;
+    padding: 14px 24px;
+    font-size: 14px;
+  }
+
+  .or-divider {
+    font-size: 12px;
+  }
+
+  .or-divider::before,
+  .or-divider::after {
+    margin: 0 8px;
   }
 } 
