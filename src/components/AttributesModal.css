@@ -381,6 +381,113 @@
   cursor: not-allowed;
 }
 
+.value-constraints {
+  margin-top: 4px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.value-constraints small {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.no-attributes-available {
+  padding: 20px;
+  text-align: center;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 2px dashed #d1d5db;
+  color: #6b7280;
+}
+
+.attribute-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.attribute-option {
+  padding: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.attribute-option:hover {
+  background-color: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.attribute-option.selected {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: #667eea;
+}
+
+.attribute-option-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.attribute-key {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.selected-indicator {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.attribute-description {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.8;
+  line-height: 1.4;
+}
+
+.attribute-option.selected .attribute-description {
+  opacity: 0.9;
+}
+
+.assigned-attributes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.assigned-attribute {
+  padding: 8px 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.assigned-attribute .attribute-key {
+  font-weight: 600;
+  color: #374151;
+}
+
+.assigned-attribute .attribute-description {
+  font-weight: normal;
+  opacity: 0.7;
+}
+
 .form-actions {
   display: flex;
   gap: 12px;
@@ -479,5 +586,21 @@
   .or-divider::before,
   .or-divider::after {
     margin: 0 8px;
+  }
+
+  .attribute-selection {
+    max-height: 150px;
+  }
+
+  .attribute-option {
+    padding: 10px;
+  }
+
+  .attribute-key {
+    font-size: 13px;
+  }
+
+  .attribute-description {
+    font-size: 11px;
   }
 } 

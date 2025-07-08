@@ -56,6 +56,30 @@ export class AttributesService {
     }
   }
 
+  // Get attributes for a specific bucket
+  static async getAttributesByBucket(bucketId: number): Promise<Attribute[]> {
+    try {
+      console.log('Fetching attributes for bucketId:', bucketId);
+      
+      const { data, error } = await supabase
+        .from('attributes')
+        .select('*')
+        .eq('bucket_id', bucketId)
+        .order('key');
+
+      if (error) {
+        console.error('Error fetching attributes by bucket:', error);
+        throw error;
+      }
+
+      console.log('Attributes by bucket data:', data);
+      return data || [];
+    } catch (error) {
+      console.error('Failed to fetch attributes by bucket:', error);
+      throw error;
+    }
+  }
+
   // Get attributes for a specific bounty
   static async getBountyAttributes(bountyId: string): Promise<BountyAttribute[]> {
     try {

@@ -34,6 +34,28 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
     value: 1
   });
 
+  // Get available attributes (not already assigned to this bounty)
+  const availableAttributes = attributes.filter(attr => 
+    !bountyAttributes.some(bountyAttr => bountyAttr.attribute_id === attr.id)
+  );
+
+  // Get assigned attributes
+  const assignedAttributes = attributes.filter(attr => 
+    bountyAttributes.some(bountyAttr => bountyAttr.attribute_id === attr.id)
+  );
+
+  // Get min and max values based on type
+  const getValueConstraints = (type: string) => {
+    if (type.toLowerCase() === 'plus') {
+      return { min: 1, max: 3 };
+    } else if (type.toLowerCase() === 'minus') {
+      return { min: -3, max: -1 };
+    }
+    return { min: -3, max: 3 }; // Default range: -3 to 3 (excluding 0)
+  };
+
+  const valueConstraints = getValueConstraints(formData.type);
+
   useEffect(() => {
     if (isOpen) {
       loadData();
@@ -56,7 +78,7 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
       console.log('Loading data for bountyId:', bountyId, 'type:', typeof bountyId);
 
       const [attributesData, bountyAttributesData] = await Promise.all([
-        AttributesService.getAttributes(),
+        AttributesService.getAttributesByBucket(bucketId),
         AttributesService.getBountyAttributes(bountyId)
       ]);
 
@@ -81,11 +103,26 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
   };
 
   const handleEditAttribute = (attribute: BountyAttribute) => {
+    const constraints = getValueConstraints(attribute.type);
+    let value = attribute.value;
+    
+    // Ensure value is within constraints
+    if (value < constraints.min) {
+      value = constraints.min;
+    } else if (value > constraints.max) {
+      value = constraints.max;
+    }
+    
+    // Prevent 0 for default range (when type is not plus or minus)
+    if (!['plus', 'minus'].includes(attribute.type.toLowerCase()) && value === 0) {
+      value = 1; // Default to 1 if value is 0 in default range
+    }
+    
     setEditingAttribute(attribute);
     setFormData({
       attributeId: attribute.attribute_id,
       type: attribute.type,
-      value: attribute.value
+      value: value
     });
     setShowAddForm(true);
   };
@@ -297,22 +334,49 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
               
               <form onSubmit={handleSubmit}>
                 <div className="form-group">
-                  <label htmlFor="attributeId">Attribute:</label>
-                  <select
-                    id="attributeId"
-                    value={formData.attributeId}
-                    onChange={(e) => setFormData({ ...formData, attributeId: e.target.value })}
-                    required
-                    disabled={editingAttribute !== null} // Can't change attribute when editing
-                  >
-                    <option value="">Select an attribute</option>
-                    {attributes.map((attr) => (
-                      <option key={attr.id} value={attr.id}>
-                        {attr.key}
-                      </option>
-                    ))}
-                  </select>
+                  <label htmlFor="attributeId">Select Attribute:</label>
+                  {availableAttributes.length === 0 ? (
+                    <div className="no-attributes-available">
+                      <p>All attributes for this bucket are already assigned to this bounty.</p>
+                    </div>
+                  ) : (
+                    <div className="attribute-selection">
+                      {availableAttributes.map((attr) => (
+                        <div 
+                          key={attr.id} 
+                          className={`attribute-option ${formData.attributeId === attr.id ? 'selected' : ''}`}
+                          onClick={() => setFormData({ ...formData, attributeId: attr.id })}
+                        >
+                          <div className="attribute-option-header">
+                            <span className="attribute-key">{attr.key}</span>
+                            {formData.attributeId === attr.id && (
+                              <span className="selected-indicator">✓</span>
+                            )}
+                          </div>
+                          {attr.description && (
+                            <p className="attribute-description">{attr.description}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
+                {assignedAttributes.length > 0 && (
+                  <div className="form-group">
+                    <label>Already Assigned Attributes:</label>
+                    <div className="assigned-attributes">
+                      {assignedAttributes.map((attr) => (
+                        <div key={attr.id} className="assigned-attribute">
+                          <span className="attribute-key">{attr.key}</span>
+                          {attr.description && (
+                            <span className="attribute-description"> - {attr.description}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="form-group">
                   <label htmlFor="type">Type:</label>
@@ -320,8 +384,26 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
                     type="text"
                     id="type"
                     value={formData.type}
-                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                    placeholder="e.g., rating, score, level"
+                    onChange={(e) => {
+                      const newType = e.target.value;
+                      const newConstraints = getValueConstraints(newType);
+                      let newValue = formData.value;
+                      
+                      // Adjust value if it's outside the new constraints
+                      if (newValue < newConstraints.min) {
+                        newValue = newConstraints.min;
+                      } else if (newValue > newConstraints.max) {
+                        newValue = newConstraints.max;
+                      }
+                      
+                      // Prevent 0 for default range (when type is not plus or minus)
+                      if (!['plus', 'minus'].includes(newType.toLowerCase()) && newValue === 0) {
+                        newValue = 1; // Default to 1 if switching to default range with 0
+                      }
+                      
+                      setFormData({ ...formData, type: newType, value: newValue });
+                    }}
+                    placeholder="plus or minus"
                     required
                   />
                 </div>
@@ -332,11 +414,27 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
                     type="number"
                     id="value"
                     value={formData.value}
-                    onChange={(e) => setFormData({ ...formData, value: parseInt(e.target.value) || 0 })}
-                    min="0"
-                    max="100"
+                    onChange={(e) => {
+                      let newValue = parseInt(e.target.value) || valueConstraints.min;
+                      
+                      // Prevent 0 for default range (when type is not plus or minus)
+                      if (!['plus', 'minus'].includes(formData.type.toLowerCase()) && newValue === 0) {
+                        newValue = newValue > 0 ? 1 : -1;
+                      }
+                      
+                      setFormData({ ...formData, value: newValue });
+                    }}
+                    min={valueConstraints.min}
+                    max={valueConstraints.max}
                     required
                   />
+                  <div className="value-constraints">
+                    <small>
+                      {formData.type.toLowerCase() === 'plus' && 'Range: 1 to 3'}
+                      {formData.type.toLowerCase() === 'minus' && 'Range: -3 to -1'}
+                      {!['plus', 'minus'].includes(formData.type.toLowerCase()) && 'Range: -3 to 3 (excluding 0)'}
+                    </small>
+                  </div>
                 </div>
 
                 <div className="form-actions">
@@ -351,7 +449,7 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
                   <button
                     type="submit"
                     className="save-button"
-                    disabled={loading}
+                    disabled={loading || !formData.attributeId}
                   >
                     {loading ? 'Saving...' : (editingAttribute ? 'Update' : 'Add')}
                   </button>
