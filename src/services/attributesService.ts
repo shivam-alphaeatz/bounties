@@ -178,11 +178,11 @@ export class AttributesService {
   }
 
   // Create a new attribute
-  static async createAttribute(key: string): Promise<Attribute> {
+  static async createAttribute(key: string, description?: string, bucket_id?: number): Promise<Attribute> {
     try {
       const { data, error } = await supabase
         .from('attributes')
-        .insert({ key })
+        .insert({ key, description, bucket_id })
         .select()
         .single();
 
@@ -194,6 +194,46 @@ export class AttributesService {
       return data;
     } catch (error) {
       console.error('Failed to create attribute:', error);
+      throw error;
+    }
+  }
+
+  // Update an existing attribute
+  static async updateAttribute(id: string, key: string, description?: string, bucket_id?: number): Promise<Attribute> {
+    try {
+      const { data, error } = await supabase
+        .from('attributes')
+        .update({ key, description, bucket_id })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error updating attribute:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Failed to update attribute:', error);
+      throw error;
+    }
+  }
+
+  // Delete an attribute
+  static async deleteAttribute(id: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('attributes')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting attribute:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Failed to delete attribute:', error);
       throw error;
     }
   }

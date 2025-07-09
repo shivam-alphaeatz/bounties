@@ -11,14 +11,61 @@ interface PushNotificationPayload {
   categoryId: string;
 }
 
+interface NotificationOption {
+  title: string;
+  body: string;
+}
+
 export class PushNotificationService {
   private static readonly EDGE_FUNCTION_URL = 'https://nwfhqrmdjmjopbxulyhu.supabase.co/functions/v1/broadcast_push_notification';
   private static readonly AUTH_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53Zmhxcm1kam1qb3BieHVseWh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNjc5MDMsImV4cCI6MjA2MTg0MzkwM30.NvbyIKp7BxALfO0SBpdFcbCXXhPcOJ_4YJY8HPyVlzs';
 
+  private static readonly NOTIFICATION_POOL: NotificationOption[] = [
+    {
+      title: "Let's Go! 🔥",
+      body: "Your new bounty is live. One small action today, big change tomorrow."
+    },
+    {
+      title: "Mission Accepted 🧭",
+      body: "You've picked your quest. Take the first step — it matters."
+    },
+    {
+      title: "In Motion 💫",
+      body: "You just sparked momentum. Stick with it — small moves count."
+    },
+    {
+      title: "Today's Adventure Awaits 🌿",
+      body: "Your bounty is active. A moment for you, today."
+    },
+    {
+      title: "Keep the Flame Alive 🔥",
+      body: "Progress grows with consistency. You're closer than you think."
+    },
+    {
+      title: "Still Time to Show Up 🕰️",
+      body: "Your bounty is waiting. A small win is still a win."
+    },
+    {
+      title: "Momentum Over Perfection 💡",
+      body: "Didn't get to it yet? One small action still shifts the day."
+    },
+    {
+      title: "Little Efforts Add Up 📈",
+      body: "You're doing the work — keep showing up, even if it's messy."
+    }
+  ];
+
+  private static getRandomNotification(): NotificationOption {
+    const randomIndex = Math.floor(Math.random() * this.NOTIFICATION_POOL.length);
+    return this.NOTIFICATION_POOL[randomIndex];
+  }
+
   static async sendBountySubmissionNotification(): Promise<void> {
+    const randomNotification = this.getRandomNotification();
+    
     const payload: PushNotificationPayload = {
-      title: "You're In! 🎯",
-      body: "Your bounty quest has begun. Keep showing up — progress starts now.",
+      title: randomNotification.title,
+      body: randomNotification.body,
       data: {
         type: "bounty_submission",
         deep_link: "app://bounty/active",

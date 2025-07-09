@@ -135,48 +135,38 @@
 .action-buttons {
   display: flex;
   gap: 8px;
+  align-items: center;
 }
 
-.view-btn,
-.edit-btn,
-.delete-btn {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 6px;
+.view-btn, .edit-btn, .delete-btn {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  color: #fff;
+  border: 2px solid #1d4ed8;
+  font-weight: 700;
+  opacity: 1;
+  box-shadow: 0 2px 4px rgba(29, 78, 216, 0.2);
+  padding: 8px 16px;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  min-width: 60px;
   transition: all 0.3s ease;
 }
 
-.view-btn {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: white;
+.view-btn:hover, .edit-btn:hover, .delete-btn:hover {
+  background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.3);
 }
 
-.view-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
-}
-
-.edit-btn {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-}
-
-.edit-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-}
-
-.delete-btn {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: white;
-}
-
-.delete-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+.view-btn:disabled, .edit-btn:disabled, .delete-btn:disabled {
+  background: linear-gradient(135deg, #a3a3a3 0%, #737373 100%) !important;
+  color: #fff !important;
+  opacity: 1 !important;
+  border: 2px solid #737373 !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
 }
 
 /* Modal Styles */
@@ -658,6 +648,17 @@
   margin: 20px;
 }
 
+.no-prompts-message {
+  text-align: center;
+  padding: 40px;
+  color: #6b7280;
+  font-size: 1.125rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin: 20px;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .prompts-header {
@@ -671,7 +672,17 @@
   }
   
   .action-buttons {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  
+  .view-btn,
+  .edit-btn,
+  .delete-btn {
+    padding: 6px 12px;
+    font-size: 0.75rem;
+    min-width: 50px;
   }
   
   .modal {

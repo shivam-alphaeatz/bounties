@@ -53,8 +53,10 @@ const BountyPromptsTable: React.FC = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+      console.log('Fetched prompts:', data); // Debug log
       setPrompts(data || []);
     } catch (err) {
+      console.error('Error fetching prompts:', err); // Debug log
       setError(err instanceof Error ? err.message : 'Failed to fetch prompts');
     } finally {
       setLoading(false);
@@ -260,6 +262,8 @@ const BountyPromptsTable: React.FC = () => {
     return matchesBucket && matchesType;
   });
 
+  console.log('Filtered prompts:', filteredPrompts); // Debug log
+
   if (loading) return <div className="loading">Loading prompts...</div>;
   if (error) return <div className="error">Error: {error}</div>;
 
@@ -297,63 +301,69 @@ const BountyPromptsTable: React.FC = () => {
       </div>
 
       <div className="prompts-table-container">
-        <table className="prompts-table">
-          <thead>
-            <tr>
-              <th>Bucket</th>
-              <th>Type</th>
-              <th>Prompt Preview</th>
-              <th>Created</th>
-              <th>Updated</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredPrompts.map((prompt) => (
-              <tr key={prompt.id}>
-                <td>{getBucketName(prompt.bucket_id)}</td>
-                <td>{prompt.type}</td>
-                <td>
-                  <div className="prompt-preview">
-                    {getPromptPreview(prompt.prompt)}
-                    {isJsonPrompt(prompt.prompt) && (
-                      <span className="json-badge">JSON</span>
-                    )}
-                  </div>
-                </td>
-                <td>{new Date(prompt.created_at).toLocaleDateString()}</td>
-                <td>
-                  {prompt.updated_at 
-                    ? new Date(prompt.updated_at).toLocaleDateString()
-                    : '-'
-                  }
-                </td>
-                <td>
-                  <div className="action-buttons">
-                    <button
-                      onClick={() => handleView(prompt)}
-                      className="view-btn"
-                    >
-                      View
-                    </button>
-                    <button
-                      onClick={() => handleEdit(prompt)}
-                      className="edit-btn"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(prompt.id)}
-                      className="delete-btn"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </td>
+        {filteredPrompts.length === 0 ? (
+          <div className="no-prompts-message">
+            <p>No prompts found. {filterBucket || filterType ? 'Try clearing the filters or ' : ''}Click "Add New Prompt" to create one.</p>
+          </div>
+        ) : (
+          <table className="prompts-table">
+            <thead>
+              <tr>
+                <th>Bucket</th>
+                <th>Type</th>
+                <th>Prompt Preview</th>
+                <th>Created</th>
+                <th>Updated</th>
+                <th>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredPrompts.map((prompt) => (
+                <tr key={prompt.id}>
+                  <td>{getBucketName(prompt.bucket_id)}</td>
+                  <td>{prompt.type}</td>
+                  <td>
+                    <div className="prompt-preview">
+                      {getPromptPreview(prompt.prompt)}
+                      {isJsonPrompt(prompt.prompt) && (
+                        <span className="json-badge">JSON</span>
+                      )}
+                    </div>
+                  </td>
+                  <td>{new Date(prompt.created_at).toLocaleDateString()}</td>
+                  <td>
+                    {prompt.updated_at 
+                      ? new Date(prompt.updated_at).toLocaleDateString()
+                      : '-'
+                    }
+                  </td>
+                  <td>
+                    <div className="action-buttons">
+                      <button
+                        onClick={() => handleView(prompt)}
+                        className="view-btn"
+                      >
+                        View
+                      </button>
+                      <button
+                        onClick={() => handleEdit(prompt)}
+                        className="edit-btn"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(prompt.id)}
+                        className="delete-btn"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Form Modal */}
@@ -411,40 +421,40 @@ const BountyPromptsTable: React.FC = () => {
                 </div>
                 
                 {editMode === 'fields' ? (
-                  <div className="json-fields-container">
-                    {jsonFields.map((field, index) => (
-                      <div key={index} className="json-field-row">
-                        <input
-                          type="text"
-                          placeholder="Key"
-                          value={field.key}
-                          onChange={(e) => updateJsonField(index, 'key', e.target.value)}
-                          className="field-key-input"
-                        />
-                        <textarea
-                          placeholder="Value"
-                          value={field.value}
-                          onChange={(e) => updateJsonField(index, 'value', e.target.value)}
-                          rows={2}
-                          className="field-value-input"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeJsonField(index)}
-                          className="remove-field-btn"
-                          title="Remove field"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={addJsonField}
-                      className="add-field-btn"
-                    >
-                      + Add Field
-                    </button>
+                <div className="json-fields-container">
+                  {jsonFields.map((field, index) => (
+                    <div key={index} className="json-field-row">
+                      <input
+                        type="text"
+                        placeholder="Key"
+                        value={field.key}
+                        onChange={(e) => updateJsonField(index, 'key', e.target.value)}
+                        className="field-key-input"
+                      />
+                      <textarea
+                        placeholder="Value"
+                        value={field.value}
+                        onChange={(e) => updateJsonField(index, 'value', e.target.value)}
+                        rows={2}
+                        className="field-value-input"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeJsonField(index)}
+                        className="remove-field-btn"
+                        title="Remove field"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addJsonField}
+                    className="add-field-btn"
+                  >
+                    + Add Field
+                  </button>
                     <div className="json-preview">
                       <label htmlFor="json-preview-textarea">JSON Editor:</label>
                       <textarea
@@ -536,8 +546,8 @@ const BountyPromptsTable: React.FC = () => {
                           return <span className="invalid-json">✗ Invalid JSON</span>;
                         }
                       })()}
-                    </div>
-                  </div>
+                </div>
+                </div>
                 )}
               </div>
               <div className="form-actions">
@@ -562,10 +572,10 @@ const BountyPromptsTable: React.FC = () => {
               <button onClick={closeView} className="close-btn">&times;</button>
             </div>
             <div className="prompt-view">
-              <div className="view-group">
-                <label>Bucket:</label>
-                <span>{getBucketName(viewingPrompt.bucket_id)}</span>
-              </div>
+                              <div className="view-group">
+                  <label>Bucket:</label>
+                  <span>{getBucketName(viewingPrompt.bucket_id)}</span>
+                </div>
               <div className="view-group">
                 <label>Type:</label>
                 <span>{viewingPrompt.type}</span>

@@ -4,9 +4,10 @@ import BountiesTable from './components/BountiesTable';
 import AIBountiesTab from './components/AIBountiesTab';
 import BountyPromptsTable from './components/BountyPromptsTable';
 import AcceptedBountiesTab from './components/AcceptedBountiesTab';
+import DataManagementTab from './components/DataManagementTab';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'bounties' | 'ai-bounties' | 'prompts' | 'accepted-bounties'>('bounties');
+  const [activeTab, setActiveTab] = useState<'bounties' | 'ai-bounties' | 'prompts' | 'accepted-bounties' | 'data-management'>('bounties');
 
   return (
     <div className="App">
@@ -39,6 +40,12 @@ function App() {
           >
             Bounty Prompts
           </button>
+          <button 
+            className={`tab-button ${activeTab === 'data-management' ? 'active' : ''}`}
+            onClick={() => setActiveTab('data-management')}
+          >
+            Data Management
+          </button>
         </div>
         
         <div className="tab-content">
@@ -46,6 +53,7 @@ function App() {
           {activeTab === 'ai-bounties' && <AIBountiesTab onNavigateToAcceptedBounties={() => setActiveTab('accepted-bounties')} />}
           {activeTab === 'accepted-bounties' && <AcceptedBountiesTab />}
           {activeTab === 'prompts' && <BountyPromptsTable />}
+          {activeTab === 'data-management' && <DataManagementTab />}
         </div>
       </main>
     </div>
