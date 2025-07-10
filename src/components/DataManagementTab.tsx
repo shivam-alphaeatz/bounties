@@ -7,6 +7,7 @@ interface AttributeFormData {
   key: string;
   description: string;
   bucket_id: number | null;
+  type: string;
 }
 
 interface FactFormData {
@@ -36,7 +37,8 @@ const DataManagementTab: React.FC = () => {
   const [attributeFormData, setAttributeFormData] = useState<AttributeFormData>({
     key: '',
     description: '',
-    bucket_id: null
+    bucket_id: null,
+    type: 'attribute'
   });
   const [isAttributeFormOpen, setIsAttributeFormOpen] = useState(false);
   const [attributeFilterBucket, setAttributeFilterBucket] = useState<string>('all');
@@ -102,7 +104,8 @@ const DataManagementTab: React.FC = () => {
     setAttributeFormData({
       key: '',
       description: '',
-      bucket_id: null
+      bucket_id: null,
+      type: 'attribute'
     });
     setIsAttributeFormOpen(true);
   };
@@ -112,7 +115,8 @@ const DataManagementTab: React.FC = () => {
     setAttributeFormData({
       key: attribute.key,
       description: attribute.description || '',
-      bucket_id: attribute.bucket_id || null
+      bucket_id: attribute.bucket_id || null,
+      type: 'attribute'
     });
     setIsAttributeFormOpen(true);
   };
@@ -145,13 +149,15 @@ const DataManagementTab: React.FC = () => {
           editingAttribute.id,
           attributeFormData.key.trim(),
           attributeFormData.description.trim() || undefined,
-          attributeFormData.bucket_id !== null ? attributeFormData.bucket_id : undefined
+          attributeFormData.bucket_id !== null ? attributeFormData.bucket_id : undefined,
+          attributeFormData.type
         );
       } else {
         await AttributesService.createAttribute(
           attributeFormData.key.trim(),
           attributeFormData.description.trim() || undefined,
-          attributeFormData.bucket_id !== null ? attributeFormData.bucket_id : undefined
+          attributeFormData.bucket_id !== null ? attributeFormData.bucket_id : undefined,
+          attributeFormData.type
         );
       }
 
@@ -160,7 +166,8 @@ const DataManagementTab: React.FC = () => {
       setAttributeFormData({
         key: '',
         description: '',
-        bucket_id: null
+        bucket_id: null,
+        type: 'attribute'
       });
       await fetchAttributes();
     } catch (err) {
@@ -175,7 +182,8 @@ const DataManagementTab: React.FC = () => {
     setAttributeFormData({
       key: '',
       description: '',
-      bucket_id: null
+      bucket_id: null,
+      type: 'attribute'
     });
     setAttributeError(null);
   };
@@ -422,6 +430,7 @@ const DataManagementTab: React.FC = () => {
                 <tr>
                   <th>Key</th>
                   <th>Description</th>
+                  <th>Type</th>
                   <th>Category</th>
                   <th>Actions</th>
                 </tr>
@@ -432,6 +441,11 @@ const DataManagementTab: React.FC = () => {
                     <td className="data-key">{attribute.key}</td>
                     <td className="data-description">
                       {attribute.description || <span className="no-description">No description</span>}
+                    </td>
+                    <td className="data-type">
+                      <span className={`type-badge ${attribute.type || 'attribute'}`}>
+                        {attribute.type || 'attribute'}
+                      </span>
                     </td>
                     <td className="data-category">
                       <span className={`category-badge ${attribute.bucket_id ? 'assigned' : 'unassigned'}`}>
@@ -513,6 +527,20 @@ const DataManagementTab: React.FC = () => {
                         {name}
                       </option>
                     ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="attribute-type">Type</label>
+                  <select
+                    id="attribute-type"
+                    value={attributeFormData.type}
+                    onChange={(e) => setAttributeFormData({ ...attributeFormData, type: e.target.value })}
+                    className="form-select"
+                  >
+                    <option value="attribute">Attribute</option>
+                    <option value="fact">Fact</option>
+                    <option value="image">Image</option>
                   </select>
                 </div>
 

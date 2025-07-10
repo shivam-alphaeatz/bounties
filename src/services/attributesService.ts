@@ -5,6 +5,7 @@ export interface Attribute {
   key: string;
   description?: string;
   bucket_id?: number;
+  type?: string;
 }
 
 export interface BountyAttribute {
@@ -178,11 +179,11 @@ export class AttributesService {
   }
 
   // Create a new attribute
-  static async createAttribute(key: string, description?: string, bucket_id?: number): Promise<Attribute> {
+  static async createAttribute(key: string, description?: string, bucket_id?: number, type?: string): Promise<Attribute> {
     try {
       const { data, error } = await supabase
         .from('attributes')
-        .insert({ key, description, bucket_id })
+        .insert({ key, description, bucket_id, type })
         .select()
         .single();
 
@@ -199,11 +200,11 @@ export class AttributesService {
   }
 
   // Update an existing attribute
-  static async updateAttribute(id: string, key: string, description?: string, bucket_id?: number): Promise<Attribute> {
+  static async updateAttribute(id: string, key: string, description?: string, bucket_id?: number, type?: string): Promise<Attribute> {
     try {
       const { data, error } = await supabase
         .from('attributes')
-        .update({ key, description, bucket_id })
+        .update({ key, description, bucket_id, type })
         .eq('id', id)
         .select()
         .single();
