@@ -3,7 +3,8 @@ CREATE TABLE IF NOT EXISTS attributes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     key TEXT NOT NULL UNIQUE,
     description TEXT,
-    bucket_id INTEGER
+    bucket_id INTEGER,
+    type TEXT
 );
 
 -- Create the bounty_attributes table for the relationship between bounties and attributes
@@ -40,6 +41,7 @@ COMMENT ON COLUMN attributes.id IS 'Unique identifier for the attribute';
 COMMENT ON COLUMN attributes.key IS 'The attribute name/key (e.g., "difficulty", "priority", "category")';
 COMMENT ON COLUMN attributes.description IS 'Optional description of the attribute';
 COMMENT ON COLUMN attributes.bucket_id IS 'Optional bucket/category ID for the attribute';
+COMMENT ON COLUMN attributes.type IS 'The type of attribute (e.g., "attribute", "fact", "image")';
 
 COMMENT ON TABLE bounty_attributes IS 'Stores the relationship between bounties and their attributes';
 COMMENT ON COLUMN bounty_attributes.bounty_id IS 'Reference to the bounty';

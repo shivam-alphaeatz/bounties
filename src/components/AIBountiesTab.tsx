@@ -468,7 +468,7 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
               bounty: bountyToSubmit.bounty,
               type: bountyToSubmit.type,
               target_value: 1,
-              lifespan: 1,
+              lifespan: 24,
               expiry: bountyToSubmit.expiry_timestamp
             })
             .select();

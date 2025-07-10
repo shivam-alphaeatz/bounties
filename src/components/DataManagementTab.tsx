@@ -38,7 +38,7 @@ const DataManagementTab: React.FC = () => {
     key: '',
     description: '',
     bucket_id: null,
-    type: 'attribute'
+    type: ''
   });
   const [isAttributeFormOpen, setIsAttributeFormOpen] = useState(false);
   const [attributeFilterBucket, setAttributeFilterBucket] = useState<string>('all');
@@ -105,7 +105,7 @@ const DataManagementTab: React.FC = () => {
       key: '',
       description: '',
       bucket_id: null,
-      type: 'attribute'
+      type: ''
     });
     setIsAttributeFormOpen(true);
   };
@@ -116,7 +116,7 @@ const DataManagementTab: React.FC = () => {
       key: attribute.key,
       description: attribute.description || '',
       bucket_id: attribute.bucket_id || null,
-      type: 'attribute'
+      type: attribute.type || ''
     });
     setIsAttributeFormOpen(true);
   };
@@ -183,7 +183,7 @@ const DataManagementTab: React.FC = () => {
       key: '',
       description: '',
       bucket_id: null,
-      type: 'attribute'
+      type: ''
     });
     setAttributeError(null);
   };
@@ -532,16 +532,14 @@ const DataManagementTab: React.FC = () => {
 
                 <div className="form-group">
                   <label htmlFor="attribute-type">Type</label>
-                  <select
+                  <input
+                    type="text"
                     id="attribute-type"
                     value={attributeFormData.type}
                     onChange={(e) => setAttributeFormData({ ...attributeFormData, type: e.target.value })}
-                    className="form-select"
-                  >
-                    <option value="attribute">Attribute</option>
-                    <option value="fact">Fact</option>
-                    <option value="image">Image</option>
-                  </select>
+                    placeholder="e.g., difficulty, rating, duration"
+                    className="form-input"
+                  />
                 </div>
 
                 <div className="form-actions">
