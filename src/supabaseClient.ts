@@ -2,7 +2,9 @@ import { createClient } from '@supabase/supabase-js';
 
 // Supabase connection details from environment variables
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://nwfhqrmdjmjopbxulyhu.supabase.co';
-const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53Zmhxcm1kam1qb3BieHVseWh1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjI2NzkwMywiZXhwIjoyMDYxODQzOTAzfQ.QjKCJFJaJM1E3PKa22wJ2yvptXBLmYw-u4QF7fS0sfs';
+// TODO: Replace this with your actual anon key from Supabase dashboard
+// Go to Settings → API → Copy the "anon public" key (not service_role)
+const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'YOUR_ANON_KEY_HERE';
 
 // Create a single supabase client for interacting with your database
 export const supabase = createClient(supabaseUrl, supabaseKey);

@@ -45,6 +45,16 @@ CREATE TABLE IF NOT EXISTS bountyBucketWeight (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Create the all_bounty_prompts table for JSON prompts
+CREATE TABLE IF NOT EXISTS all_bounty_prompts (
+    id SERIAL PRIMARY KEY,
+    bucket_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_bounty_selection_history_bucket_id ON bounty_selection_history(bucket_id);
 CREATE INDEX IF NOT EXISTS idx_bounty_selection_history_action ON bounty_selection_history(action);
@@ -63,6 +73,10 @@ CREATE INDEX IF NOT EXISTS idx_bounties_date ON bounties(date);
 CREATE INDEX IF NOT EXISTS idx_bounties_type ON bounties(type);
 CREATE INDEX IF NOT EXISTS idx_bountyBucketWeight_bountyId ON bountyBucketWeight(bountyId);
 CREATE INDEX IF NOT EXISTS idx_bountyBucketWeight_bucketId ON bountyBucketWeight(bucketId);
+
+CREATE INDEX IF NOT EXISTS idx_all_bounty_prompts_bucket_id ON all_bounty_prompts(bucket_id);
+CREATE INDEX IF NOT EXISTS idx_all_bounty_prompts_type ON all_bounty_prompts(type);
+CREATE INDEX IF NOT EXISTS idx_all_bounty_prompts_created_at ON all_bounty_prompts(created_at);
 
 -- Add comments to the tables
 COMMENT ON TABLE bounty_selection_history IS 'Stores AI-generated bounties with status flow: pending -> approved/rejected -> finalized';
@@ -96,11 +110,19 @@ COMMENT ON COLUMN bountyBucketWeight.bountyId IS 'Reference to the bounty';
 COMMENT ON COLUMN bountyBucketWeight.bucketId IS 'The bucket/category ID';
 COMMENT ON COLUMN bountyBucketWeight.weight IS 'The weight for this category';
 
+COMMENT ON TABLE all_bounty_prompts IS 'Stores JSON prompts for AI bounty generation';
+COMMENT ON COLUMN all_bounty_prompts.bucket_id IS 'The bucket/category ID (1-6)';
+COMMENT ON COLUMN all_bounty_prompts.type IS 'The type of prompt (daily, weekly, yearly)';
+COMMENT ON COLUMN all_bounty_prompts.prompt IS 'The JSON prompt content';
+COMMENT ON COLUMN all_bounty_prompts.created_at IS 'When the prompt was created';
+COMMENT ON COLUMN all_bounty_prompts.updated_at IS 'When the prompt was last updated';
+
 -- Enable Row Level Security (RLS) for better security
 ALTER TABLE bounty_selection_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bounty_actions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bounties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bountyBucketWeight ENABLE ROW LEVEL SECURITY;
+ALTER TABLE all_bounty_prompts ENABLE ROW LEVEL SECURITY;
 
 -- Create policies that allow all operations (you can modify this based on your security needs)
 CREATE POLICY "Allow all operations on bounty_selection_history" ON bounty_selection_history
@@ -113,4 +135,7 @@ CREATE POLICY "Allow all operations on bounties" ON bounties
     FOR ALL USING (true);
 
 CREATE POLICY "Allow all operations on bountyBucketWeight" ON bountyBucketWeight
+    FOR ALL USING (true);
+
+CREATE POLICY "Allow all operations on all_bounty_prompts" ON all_bounty_prompts
     FOR ALL USING (true); 

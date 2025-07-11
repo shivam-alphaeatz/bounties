@@ -97,6 +97,7 @@ const BountyPromptsTable: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      console.log('Starting save process...'); // Debug log
       let jsonString: string;
       
       if (editMode === 'fields') {
@@ -105,57 +106,84 @@ const BountyPromptsTable: React.FC = () => {
           try {
             JSON.parse(rawJsonText);
             jsonString = rawJsonText;
+            console.log('Using raw JSON text:', jsonString); // Debug log
           } catch (parseError) {
+            console.error('JSON parse error:', parseError); // Debug log
             setError('Invalid JSON format in the JSON Editor. Please check your syntax.');
             return;
           }
         } else {
           jsonString = convertFieldsToJson(jsonFields);
+          console.log('Using converted JSON from fields:', jsonString); // Debug log
         }
       } else {
         // Validate raw JSON
         try {
           JSON.parse(rawJsonText);
           jsonString = rawJsonText;
+          console.log('Using raw JSON from raw mode:', jsonString); // Debug log
         } catch (parseError) {
+          console.error('JSON parse error in raw mode:', parseError); // Debug log
           setError('Invalid JSON format. Please check your syntax.');
           return;
         }
       }
       
+      console.log('About to save to Supabase...'); // Debug log
+      console.log('Editing prompt:', editingPrompt); // Debug log
+      console.log('Form data:', formData); // Debug log
+      
       if (editingPrompt) {
         // Update existing prompt
-        const { error } = await supabase
+        console.log('Updating existing prompt with ID:', editingPrompt.id); // Debug log
+        const { data, error } = await supabase
           .from('all_bounty_prompts')
           .update({
             bucket_id: formData.bucket_id,
             type: formData.type,
             prompt: jsonString
           })
-          .eq('id', editingPrompt.id);
+          .eq('id', editingPrompt.id)
+          .select();
 
-        if (error) throw error;
+        console.log('Update response - data:', data, 'error:', error); // Debug log
+        if (error) {
+          console.error('Supabase update error:', error); // Debug log
+          throw error;
+        }
+        console.log('Update successful!'); // Debug log
       } else {
         // Create new prompt
-        const { error } = await supabase
+        console.log('Creating new prompt...'); // Debug log
+        const { data, error } = await supabase
           .from('all_bounty_prompts')
           .insert([{
             bucket_id: formData.bucket_id,
             type: formData.type,
             prompt: jsonString
-          }]);
+          }])
+          .select();
 
-        if (error) throw error;
+        console.log('Insert response - data:', data, 'error:', error); // Debug log
+        if (error) {
+          console.error('Supabase insert error:', error); // Debug log
+          throw error;
+        }
+        console.log('Insert successful!'); // Debug log
       }
 
+      console.log('Clearing form and refreshing data...'); // Debug log
       setFormData({ bucket_id: '', type: '', prompt: '' });
       setJsonFields([]);
       setRawJsonText('');
       setEditingPrompt(null);
       setIsFormOpen(false);
       setEditMode('fields');
-      fetchPrompts();
+      setError(null); // Clear any previous errors
+      await fetchPrompts(); // Refresh the data
+      console.log('Save process completed successfully!'); // Debug log
     } catch (err) {
+      console.error('Save process failed:', err); // Debug log
       setError(err instanceof Error ? err.message : 'Failed to save prompt');
     }
   };
@@ -183,8 +211,19 @@ const BountyPromptsTable: React.FC = () => {
       type: prompt.type,
       prompt: prompt.prompt
     });
-    setJsonFields(parseJsonToFields(prompt.prompt));
-    setRawJsonText(prompt.prompt);
+    
+    // Parse the prompt and set both fields and raw JSON
+    const fields = parseJsonToFields(prompt.prompt);
+    setJsonFields(fields);
+    
+    // Format the JSON nicely for the raw editor
+    try {
+      const parsed = JSON.parse(prompt.prompt);
+      setRawJsonText(JSON.stringify(parsed, null, 2));
+    } catch {
+      setRawJsonText(prompt.prompt);
+    }
+    
     setIsFormOpen(true);
     setEditMode('fields');
   };
@@ -207,17 +246,31 @@ const BountyPromptsTable: React.FC = () => {
   };
 
   const addJsonField = () => {
-    setJsonFields([...jsonFields, { key: '', value: '' }]);
+    const newFields = [...jsonFields, { key: '', value: '' }];
+    setJsonFields(newFields);
+    
+    // Auto-sync to raw JSON when adding field
+    const updatedJson = convertFieldsToJson(newFields);
+    setRawJsonText(updatedJson);
   };
 
   const removeJsonField = (index: number) => {
-    setJsonFields(jsonFields.filter((_, i) => i !== index));
+    const newFields = jsonFields.filter((_, i) => i !== index);
+    setJsonFields(newFields);
+    
+    // Auto-sync to raw JSON when removing field
+    const updatedJson = convertFieldsToJson(newFields);
+    setRawJsonText(updatedJson);
   };
 
   const updateJsonField = (index: number, field: 'key' | 'value', value: string) => {
     const newFields = [...jsonFields];
     newFields[index] = { ...newFields[index], [field]: value };
     setJsonFields(newFields);
+    
+    // Auto-sync to raw JSON when fields change
+    const updatedJson = convertFieldsToJson(newFields);
+    setRawJsonText(updatedJson);
   };
 
   const getPromptPreview = (prompt: string): string => {
@@ -460,17 +513,25 @@ const BountyPromptsTable: React.FC = () => {
                       <textarea
                         id="json-preview-textarea"
                         className="json-preview-textarea"
-                        value={(() => {
-                          // Use a separate state for the JSON editor content
-                          try {
-                            return JSON.stringify(JSON.parse(rawJsonText || convertFieldsToJson(jsonFields)), null, 2);
-                          } catch {
-                            return rawJsonText || convertFieldsToJson(jsonFields);
-                          }
-                        })()}
+                        value={rawJsonText}
                         onChange={(e) => {
-                          // Update the raw JSON text independently
-                          setRawJsonText(e.target.value);
+                          const newValue = e.target.value;
+                          setRawJsonText(newValue);
+                          
+                          // Auto-sync from raw JSON to fields when valid JSON is entered
+                          try {
+                            const parsed = JSON.parse(newValue);
+                            const newFields: JsonField[] = [];
+                            Object.entries(parsed).forEach(([key, value]) => {
+                              newFields.push({
+                                key,
+                                value: typeof value === 'string' ? value : JSON.stringify(value)
+                              });
+                            });
+                            setJsonFields(newFields);
+                          } catch (error) {
+                            // If JSON is invalid, don't update fields - let user fix the JSON first
+                          }
                         }}
                         onKeyDown={(e) => {
                           // Prevent Ctrl+A from selecting the whole page
@@ -493,38 +554,7 @@ const BountyPromptsTable: React.FC = () => {
                         })()}
                       </div>
                       <div className="json-editor-actions">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            // Sync from fields to JSON editor
-                            setRawJsonText(convertFieldsToJson(jsonFields));
-                          }}
-                          className="sync-btn"
-                        >
-                          Sync from Fields
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            // Sync from JSON editor to fields
-                            try {
-                              const parsed = JSON.parse(rawJsonText);
-                              const newFields: JsonField[] = [];
-                              Object.entries(parsed).forEach(([key, value]) => {
-                                newFields.push({
-                                  key,
-                                  value: typeof value === 'string' ? value : JSON.stringify(value)
-                                });
-                              });
-                              setJsonFields(newFields);
-                            } catch (error) {
-                              alert('Invalid JSON format. Please fix the JSON before syncing to fields.');
-                            }
-                          }}
-                          className="sync-btn"
-                        >
-                          Sync to Fields
-                        </button>
+                        <span className="auto-sync-notice">✓ Auto-synced with fields</span>
                       </div>
                     </div>
                   </div>
@@ -532,7 +562,25 @@ const BountyPromptsTable: React.FC = () => {
                   <div className="raw-json-container">
                     <textarea
                       value={rawJsonText}
-                      onChange={(e) => setRawJsonText(e.target.value)}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setRawJsonText(newValue);
+                        
+                        // Auto-sync from raw JSON to fields when valid JSON is entered
+                        try {
+                          const parsed = JSON.parse(newValue);
+                          const newFields: JsonField[] = [];
+                          Object.entries(parsed).forEach(([key, value]) => {
+                            newFields.push({
+                              key,
+                              value: typeof value === 'string' ? value : JSON.stringify(value)
+                            });
+                          });
+                          setJsonFields(newFields);
+                        } catch (error) {
+                          // If JSON is invalid, don't update fields - let user fix the JSON first
+                        }
+                      }}
                       placeholder="Enter JSON content here..."
                       className="raw-json-textarea"
                       rows={15}
