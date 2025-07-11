@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AIBountiesService, BountyToBeSubmitted } from '../services/aiBountiesService';
 import { AttributesService, BountyAttribute } from '../services/attributesService';
+import { BountyImageService } from '../services/bountyImageService';
 import AttributesModal from './AttributesModal';
 import './AcceptedBountiesTab.css';
 
 interface BountyWithAttributes extends BountyToBeSubmitted {
   attributes?: BountyAttribute[];
+  imageUrl?: string | null;
 }
 
 const AcceptedBountiesTab: React.FC = () => {
@@ -34,20 +36,25 @@ const AcceptedBountiesTab: React.FC = () => {
       
       const bounties = await AIBountiesService.getBountiesByDate(date);
       
-      // Fetch attributes for each bounty
+      // Fetch attributes and images for each bounty
       const bountiesWithAttributes = await Promise.all(
         bounties.map(async (bounty) => {
           try {
-            const attributes = await AttributesService.getBountyAttributes(bounty.id.toString());
+            const [attributes, imageUrl] = await Promise.all([
+              AttributesService.getBountyAttributes(bounty.id.toString()),
+              BountyImageService.getBountyImage(bounty.id.toString())
+            ]);
             return {
               ...bounty,
-              attributes
+              attributes,
+              imageUrl
             };
           } catch (err) {
-            console.error(`Error fetching attributes for bounty ${bounty.id}:`, err);
+            console.error(`Error fetching data for bounty ${bounty.id}:`, err);
             return {
               ...bounty,
-              attributes: []
+              attributes: [],
+              imageUrl: null
             };
           }
         })
@@ -197,6 +204,7 @@ const AcceptedBountiesTab: React.FC = () => {
               <div className="bounties-list">
                 {bounties.map((bounty, index) => {
                   const hasAttributes = bounty.attributes && bounty.attributes.length > 0;
+                  const hasImage = bounty.imageUrl && bounty.imageUrl.trim() !== '';
                   
                   return (
                     <div key={index} className="bounty-card">
@@ -212,14 +220,19 @@ const AcceptedBountiesTab: React.FC = () => {
                               📊 {bounty.attributes!.length} attribute{bounty.attributes!.length !== 1 ? 's' : ''}
                             </span>
                           )}
+                          {hasImage && (
+                            <span className="image-indicator">
+                              🖼️ Image
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="bounty-actions">
-                        {hasAttributes ? (
+                        {hasAttributes || hasImage ? (
                           <button 
                             className="action-button edit-button"
                             onClick={() => handleEditBounty(bounty)}
-                            title="Edit bounty attributes"
+                            title="Edit bounty attributes and image"
                           >
                             <span className="button-icon">✏️</span>
                             Edit
@@ -228,7 +241,7 @@ const AcceptedBountiesTab: React.FC = () => {
                           <button 
                             className="action-button add-button"
                             onClick={() => handleAddToBounty(bounty)}
-                            title="Add attributes to bounty"
+                            title="Add attributes and image to bounty"
                           >
                             <span className="button-icon">➕</span>
                             Add

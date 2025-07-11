@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AttributesService, Attribute, BountyAttribute } from '../services/attributesService';
+import { BountyImageService } from '../services/bountyImageService';
 import './AttributesModal.css';
 
 interface AttributesModalProps {
@@ -34,6 +35,12 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
     value: 1
   });
 
+  // Image state
+  const [imageUrl, setImageUrl] = useState<string>('');
+  const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
+  const [showImageForm, setShowImageForm] = useState(false);
+
   // Get available attributes (not already assigned to this bounty)
   const availableAttributes = attributes.filter(attr => 
     !bountyAttributes.some(bountyAttr => bountyAttr.attribute_id === attr.id)
@@ -67,6 +74,7 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
     if (isOpen) {
       setShowAddForm(false);
       setEditingAttribute(null);
+      setShowImageForm(false);
     }
   }, [isOpen]);
 
@@ -77,13 +85,15 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
       
       console.log('Loading data for bountyId:', bountyId, 'type:', typeof bountyId);
 
-      const [attributesData, bountyAttributesData] = await Promise.all([
+      const [attributesData, bountyAttributesData, imageData] = await Promise.all([
         AttributesService.getAttributesByBucket(bucketId),
-        AttributesService.getBountyAttributes(bountyId)
+        AttributesService.getBountyAttributes(bountyId),
+        BountyImageService.getBountyImage(bountyId)
       ]);
 
       setAttributes(attributesData);
       setBountyAttributes(bountyAttributesData);
+      setCurrentImageUrl(imageData);
     } catch (err) {
       console.error('Error loading data:', err);
       setError('Failed to load attributes data');
@@ -183,6 +193,71 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
     }
   };
 
+  // Image handling functions
+  const handleAddImage = () => {
+    setImageUrl('');
+    setShowImageForm(true);
+  };
+
+  const handleEditImage = () => {
+    setImageUrl(currentImageUrl || '');
+    setShowImageForm(true);
+  };
+
+  const handleDeleteImage = async () => {
+    if (!window.confirm('Are you sure you want to delete this image?')) {
+      return;
+    }
+
+    try {
+      setImageLoading(true);
+      await BountyImageService.deleteBountyImage(bountyId);
+      setCurrentImageUrl(null);
+      onAttributesUpdated();
+    } catch (err) {
+      console.error('Error deleting image:', err);
+      setError('Failed to delete image');
+    } finally {
+      setImageLoading(false);
+    }
+  };
+
+  const handleImageSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!imageUrl.trim()) {
+      setError('Please enter an image URL');
+      return;
+    }
+
+    try {
+      setImageLoading(true);
+      setError(null);
+
+      if (currentImageUrl) {
+        // Update existing image
+        await BountyImageService.updateBountyImage(bountyId, imageUrl);
+      } else {
+        // Add new image
+        await BountyImageService.addBountyImage(bountyId, imageUrl);
+      }
+
+      setCurrentImageUrl(imageUrl);
+      setShowImageForm(false);
+      onAttributesUpdated();
+    } catch (err) {
+      console.error('Error saving image:', err);
+      setError('Failed to save image');
+    } finally {
+      setImageLoading(false);
+    }
+  };
+
+  const handleImageCancel = () => {
+    setShowImageForm(false);
+    setImageUrl('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -236,7 +311,7 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
     <div className="attributes-modal-overlay">
       <div className="attributes-modal">
         <div className={`attributes-modal-header ${mode}-mode`}>
-          <h2>{mode === 'add' ? 'Add Attributes' : 'Edit Attributes'}</h2>
+          <h2>{mode === 'add' ? 'Add Attributes & Image' : 'Edit Attributes & Image'}</h2>
           <button className="close-button" onClick={onClose}>×</button>
         </div>
 
@@ -258,6 +333,102 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
             </div>
           )}
 
+          {/* Image Section */}
+          {!showImageForm && (
+            <div className="image-section">
+              <div className="section-header">
+                <h3>Bounty Image</h3>
+                {currentImageUrl ? (
+                  <button 
+                    className="edit-button"
+                    onClick={handleEditImage}
+                    disabled={imageLoading}
+                  >
+                    Edit Image
+                  </button>
+                ) : (
+                  <button 
+                    className="add-button"
+                    onClick={handleAddImage}
+                    disabled={imageLoading}
+                  >
+                    + Add Image
+                  </button>
+                )}
+              </div>
+
+              {currentImageUrl ? (
+                <div className="current-image">
+                  <img 
+                    src={currentImageUrl} 
+                    alt="Bounty" 
+                    className="bounty-image"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                    }}
+                  />
+                  <div className="image-error hidden">
+                    <p>Failed to load image</p>
+                  </div>
+                  <div className="image-actions">
+                    <button
+                      className="delete-button"
+                      onClick={handleDeleteImage}
+                      disabled={imageLoading}
+                    >
+                      Delete Image
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="no-image">
+                  <p>No image assigned to this bounty.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Image Form */}
+          {showImageForm && (
+            <div className="image-form">
+              <h3>{currentImageUrl ? 'Edit Image' : 'Add Image'}</h3>
+              
+              <form onSubmit={handleImageSubmit}>
+                <div className="form-group">
+                  <label htmlFor="imageUrl">Image URL:</label>
+                  <input
+                    type="url"
+                    id="imageUrl"
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    placeholder="https://example.com/image.jpg"
+                    required
+                  />
+                </div>
+
+                <div className="form-actions">
+                  <button
+                    type="button"
+                    className="cancel-button"
+                    onClick={handleImageCancel}
+                    disabled={imageLoading}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="save-button"
+                    disabled={imageLoading || !imageUrl.trim()}
+                  >
+                    {imageLoading ? 'Saving...' : (currentImageUrl ? 'Update' : 'Add')}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Attributes Section */}
           {!showAddForm && (
             <div className="attributes-section">
               <div className="section-header">
