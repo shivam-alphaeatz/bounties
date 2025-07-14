@@ -446,13 +446,18 @@ const BountyPromptsTable: React.FC = () => {
               </div>
               <div className="form-group">
                 <label htmlFor="type">Type:</label>
-                <input
-                  type="text"
+                <select
                   id="type"
                   value={formData.type}
                   onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                   required
-                />
+                >
+                  <option value="">Select a type...</option>
+                  <option value="attributes">Attributes</option>
+                  <option value="user">User</option>
+                  <option value="image">Image</option>
+                  <option value="daily">Daily</option>
+                </select>
               </div>
               <div className="form-group">
                 <label>Prompt Content:</label>
