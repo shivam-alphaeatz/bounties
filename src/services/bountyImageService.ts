@@ -6,14 +6,32 @@ export interface BountyImage {
 }
 
 export class BountyImageService {
+  // Helper function to append transformation parameters to image URL
+  private static appendImageTransformParams(imageUrl: string): string {
+    if (!imageUrl || !imageUrl.trim()) {
+      return imageUrl;
+    }
+
+    // Check if the URL already has any query parameters
+    if (imageUrl.includes('?')) {
+      // URL already has parameters, save as-is
+      return imageUrl;
+    }
+
+    // URL has no parameters, append transformation parameters
+    return `${imageUrl}?tr=w-1024,h-683,q-90,f-webp`;
+  }
+
   // Add image URL for a bounty
   static async addBountyImage(bountyId: string, imageUrl: string): Promise<void> {
     try {
+      const transformedUrl = this.appendImageTransformParams(imageUrl);
+      
       const { error } = await supabase
         .from('bounty_image_mapping')
         .insert({
           bounty_id: bountyId,
-          image_url: imageUrl
+          image_url: transformedUrl
         });
 
       if (error) {
@@ -54,6 +72,8 @@ export class BountyImageService {
   // Update image URL for a bounty
   static async updateBountyImage(bountyId: string, imageUrl: string): Promise<void> {
     try {
+      const transformedUrl = this.appendImageTransformParams(imageUrl);
+      
       // First check if an image already exists for this bounty
       const existingImage = await this.getBountyImage(bountyId);
       
@@ -61,7 +81,7 @@ export class BountyImageService {
         // Update existing record
         const { error } = await supabase
           .from('bounty_image_mapping')
-          .update({ image_url: imageUrl })
+          .update({ image_url: transformedUrl })
           .eq('bounty_id', bountyId);
 
         if (error) {
@@ -74,7 +94,7 @@ export class BountyImageService {
           .from('bounty_image_mapping')
           .insert({
             bounty_id: bountyId,
-            image_url: imageUrl
+            image_url: transformedUrl
           });
 
         if (error) {

@@ -55,6 +55,78 @@
   background-color: #1976D2;
 }
 
+/* Submit Section Styles */
+.submit-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.submit-date-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+
+.submit-date-selector label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #495057;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.submit-date-selector input {
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  color: #495057;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.submit-date-selector input:hover {
+  border-color: #adb5bd;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.submit-date-selector input:focus {
+  outline: none;
+  border-color: #2196F3;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+}
+
+.submit-date-selector input[type="date"] {
+  position: relative;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 8px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  padding-right: 32px;
+}
+
+.submit-date-selector input[type="date"]::-webkit-calendar-picker-indicator {
+  background: transparent;
+  bottom: 0;
+  color: transparent;
+  cursor: pointer;
+  height: auto;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: auto;
+}
+
 /* Cleanup Dropdown Styles */
 .cleanup-dropdown {
   position: relative;
@@ -746,36 +818,51 @@
   }
   
   .ai-bounties-actions {
-    justify-content: center;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .submit-section {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .submit-date-selector {
+    min-width: auto;
   }
   
   .category-header {
     flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
+    align-items: flex-start;
+    gap: 8px;
   }
   
   .category-actions {
-    justify-content: center;
+    align-self: stretch;
+    justify-content: space-between;
   }
   
   .bounty-actions {
     flex-direction: column;
+    gap: 8px;
   }
   
   .rejection-actions {
     flex-direction: column;
+    gap: 8px;
   }
   
   .rejection-modal {
     margin: 20px;
-    width: calc(100% - 40px);
+    max-height: 90vh;
+    overflow-y: auto;
   }
   
   .bounty-item {
     flex-direction: column;
     align-items: flex-start;
-    gap: 5px;
+    gap: 8px;
   }
   
   .bounty-item .bounty-category {
@@ -1145,3 +1232,5 @@
     gap: 12px;
   }
 } 
+
+ 

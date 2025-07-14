@@ -43,6 +43,7 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
   const [pendingCounts, setPendingCounts] = useState({ total: 0, old: 0, recent: 0 });
   const [todayApprovedCount, setTodayApprovedCount] = useState<number>(0);
   const [showCleanupDropdown, setShowCleanupDropdown] = useState(false);
+  const [submitDate, setSubmitDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [rejectionModal, setRejectionModal] = useState<{
     isOpen: boolean;
     bounty: AIBounty | null;
@@ -381,24 +382,23 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
       return;
     }
 
-    // Get today's date in YYYY-MM-DD format
-    const today = new Date();
-    const todayString = today.toISOString().split('T')[0];
+    // Use the selected submit date instead of today's date
+    const selectedDateString = submitDate;
 
     // Calculate default expiry (next day 11:59 PM)
     const defaultExpiry = new Date();
     defaultExpiry.setDate(defaultExpiry.getDate() + 1);
     defaultExpiry.setHours(23, 59, 0, 0);
 
-    // Filter bounties for today's date
-    const todayBounties = approvedBounties.filter(bounty => bounty.date === todayString);
+    // Filter bounties for the selected date
+    const selectedDateBounties = approvedBounties.filter(bounty => bounty.date === selectedDateString);
 
     // Prepare bounties for submission
-    const bountiesToSubmit: BountyToSubmit[] = todayBounties.map(bounty => ({
+    const bountiesToSubmit: BountyToSubmit[] = selectedDateBounties.map(bounty => ({
       id: bounty.id,
       bounty: bounty.bounty,
       category: bounty.category,
-      date: todayString,
+      date: selectedDateString,
       expiry_timestamp: defaultExpiry.toISOString(),
       type: bounty.type
     }));
@@ -406,7 +406,7 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
     setSubmitModal({
       isOpen: true,
       bountiesToSubmit,
-      selectedDate: todayString
+      selectedDate: selectedDateString
     });
   };
 
@@ -576,13 +576,24 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
           >
             {generating ? 'Generating...' : 'Generate All Categories'}
           </button>
-          <button 
-            className="submit-button"
-            onClick={handleSubmitApprovedBounties}
-            disabled={todayApprovedCount === 0}
-          >
-            📤 Submit Approved ({todayApprovedCount})
-          </button>
+          <div className="submit-section">
+            <div className="submit-date-selector">
+              <label htmlFor="submit-date">Date for Submission:</label>
+              <input
+                id="submit-date"
+                type="date"
+                value={submitDate}
+                onChange={(e) => setSubmitDate(e.target.value)}
+                title="Select the date for approved bounties to submit"
+              />
+            </div>
+            <button 
+              className="submit-button"
+              onClick={handleSubmitApprovedBounties}
+            >
+              📤 Submit Approved
+            </button>
+          </div>
           <div className="cleanup-dropdown">
             <button 
               className="cleanup-dropdown-button"
