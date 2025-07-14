@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { ImageKitService } from './imageKitService';
 
 export interface BountyImage {
   bounty_id: string;
@@ -141,6 +142,31 @@ export class BountyImageService {
       return data || [];
     } catch (error) {
       console.error('Failed to get all bounty images:', error);
+      throw error;
+    }
+  }
+
+  // Upload file directly to ImageKit and save URL to database
+  static async uploadAndSaveBountyImage(
+    file: File, 
+    bountyId: string, 
+    bountyName: string
+  ): Promise<string> {
+    try {
+      // Upload file to ImageKit
+      const imageUrl = await ImageKitService.uploadFileAndGetUrl({
+        file,
+        bountyId,
+        bountyName,
+        folder: '/bounties'
+      });
+
+      // Save the URL to database
+      await this.updateBountyImage(bountyId, imageUrl);
+
+      return imageUrl;
+    } catch (error) {
+      console.error('Failed to upload and save bounty image:', error);
       throw error;
     }
   }

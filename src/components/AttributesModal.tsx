@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AttributesService, Attribute, BountyAttribute } from '../services/attributesService';
 import { BountyImageService } from '../services/bountyImageService';
+import { ImageKitService } from '../services/imageKitService';
 import './AttributesModal.css';
 
 interface AttributesModalProps {
@@ -40,6 +41,9 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
   const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const [showImageForm, setShowImageForm] = useState(false);
+  const [uploadMethod, setUploadMethod] = useState<'url' | 'file'>('url');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
 
   // Get available attributes (not already assigned to this bounty)
   const availableAttributes = attributes.filter(attr => 
@@ -196,11 +200,15 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
   // Image handling functions
   const handleAddImage = () => {
     setImageUrl('');
+    setSelectedFile(null);
+    setUploadMethod('url');
     setShowImageForm(true);
   };
 
   const handleEditImage = () => {
     setImageUrl(currentImageUrl || '');
+    setSelectedFile(null);
+    setUploadMethod('url');
     setShowImageForm(true);
   };
 
@@ -222,40 +230,87 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
     }
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setError('Please select a valid image file');
+        return;
+      }
+      
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        setError('File size must be less than 10MB');
+        return;
+      }
+      
+      setSelectedFile(file);
+      setError(null);
+    }
+  };
+
   const handleImageSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!imageUrl.trim()) {
+    if (uploadMethod === 'url' && !imageUrl.trim()) {
       setError('Please enter an image URL');
+      return;
+    }
+
+    if (uploadMethod === 'file' && !selectedFile) {
+      setError('Please select a file to upload');
       return;
     }
 
     try {
       setImageLoading(true);
       setError(null);
+      setUploadProgress(0);
 
-      if (currentImageUrl) {
-        // Update existing image
-        await BountyImageService.updateBountyImage(bountyId, imageUrl);
+      let finalImageUrl: string;
+
+      if (uploadMethod === 'file' && selectedFile) {
+        // Upload file to ImageKit
+        setUploadProgress(50);
+        finalImageUrl = await BountyImageService.uploadAndSaveBountyImage(
+          selectedFile,
+          bountyId,
+          bountyName
+        );
+        setUploadProgress(100);
       } else {
-        // Add new image
-        await BountyImageService.addBountyImage(bountyId, imageUrl);
+        // Use URL directly
+        if (currentImageUrl) {
+          // Update existing image
+          await BountyImageService.updateBountyImage(bountyId, imageUrl);
+        } else {
+          // Add new image
+          await BountyImageService.addBountyImage(bountyId, imageUrl);
+        }
+        finalImageUrl = imageUrl;
       }
 
-      setCurrentImageUrl(imageUrl);
+      setCurrentImageUrl(finalImageUrl);
       setShowImageForm(false);
+      setSelectedFile(null);
+      setImageUrl('');
       onAttributesUpdated();
     } catch (err) {
       console.error('Error saving image:', err);
-      setError('Failed to save image');
+      setError(`Failed to save image: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setImageLoading(false);
+      setUploadProgress(0);
     }
   };
 
   const handleImageCancel = () => {
     setShowImageForm(false);
     setImageUrl('');
+    setSelectedFile(null);
+    setUploadMethod('url');
+    setError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -395,17 +450,71 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
               <h3>{currentImageUrl ? 'Edit Image' : 'Add Image'}</h3>
               
               <form onSubmit={handleImageSubmit}>
-                <div className="form-group">
-                  <label htmlFor="imageUrl">Image URL:</label>
-                  <input
-                    type="url"
-                    id="imageUrl"
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
-                    placeholder="https://example.com/image.jpg"
-                    required
-                  />
+                <div className="upload-method-selector">
+                  <label>
+                    <input
+                      type="radio"
+                      name="uploadMethod"
+                      value="url"
+                      checked={uploadMethod === 'url'}
+                      onChange={() => setUploadMethod('url')}
+                    />
+                    Enter Image URL
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="uploadMethod"
+                      value="file"
+                      checked={uploadMethod === 'file'}
+                      onChange={() => setUploadMethod('file')}
+                    />
+                    Upload File
+                  </label>
                 </div>
+
+                {uploadMethod === 'url' ? (
+                  <div className="form-group">
+                    <label htmlFor="imageUrl">Image URL:</label>
+                    <input
+                      type="url"
+                      id="imageUrl"
+                      value={imageUrl}
+                      onChange={(e) => setImageUrl(e.target.value)}
+                      placeholder="https://example.com/image.jpg"
+                      required={uploadMethod === 'url'}
+                    />
+                  </div>
+                ) : (
+                  <div className="form-group">
+                    <label htmlFor="imageFile">Select Image File:</label>
+                    <input
+                      type="file"
+                      id="imageFile"
+                      accept="image/*"
+                      onChange={handleFileSelect}
+                      required={uploadMethod === 'file'}
+                    />
+                    {selectedFile && (
+                      <div className="file-info">
+                        <p>Selected: {selectedFile.name}</p>
+                        <p>Size: {(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {uploadProgress > 0 && uploadProgress < 100 && (
+                  <div className="upload-progress">
+                    <div className="progress-bar">
+                      <div 
+                        className="progress-fill" 
+                        style={{ width: `${uploadProgress}%` }}
+                      ></div>
+                    </div>
+                    <p>Uploading... {uploadProgress}%</p>
+                  </div>
+                )}
 
                 <div className="form-actions">
                   <button
@@ -419,7 +528,10 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
                   <button
                     type="submit"
                     className="save-button"
-                    disabled={imageLoading || !imageUrl.trim()}
+                    disabled={imageLoading || 
+                      (uploadMethod === 'url' && !imageUrl.trim()) ||
+                      (uploadMethod === 'file' && !selectedFile)
+                    }
                   >
                     {imageLoading ? 'Saving...' : (currentImageUrl ? 'Update' : 'Add')}
                   </button>
