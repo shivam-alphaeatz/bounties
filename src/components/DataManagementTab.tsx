@@ -43,6 +43,15 @@ const DataManagementTab: React.FC = () => {
   const [isAttributeFormOpen, setIsAttributeFormOpen] = useState(false);
   const [attributeFilterBucket, setAttributeFilterBucket] = useState<string>('all');
   const [attributeSearchTerm, setAttributeSearchTerm] = useState<string>('');
+  const [selectedAttributes, setSelectedAttributes] = useState<Set<string>>(new Set());
+  const [isMassDeleteModalOpen, setIsMassDeleteModalOpen] = useState(false);
+  const [isMassAddModalOpen, setIsMassAddModalOpen] = useState(false);
+  const [massAddFormData, setMassAddFormData] = useState({
+    attributes: '',
+    description: '',
+    bucket_id: null as number | null,
+    type: ''
+  });
 
   // Facts state (placeholder)
   const [facts, setFacts] = useState<any[]>([]);
@@ -186,6 +195,123 @@ const DataManagementTab: React.FC = () => {
       type: ''
     });
     setAttributeError(null);
+  };
+
+  // Mass operations
+  const handleSelectAttribute = (attributeId: string, checked: boolean) => {
+    const newSelected = new Set(selectedAttributes);
+    if (checked) {
+      newSelected.add(attributeId);
+    } else {
+      newSelected.delete(attributeId);
+    }
+    setSelectedAttributes(newSelected);
+  };
+
+  const handleSelectAllAttributes = (checked: boolean) => {
+    if (checked) {
+      setSelectedAttributes(new Set(filteredAttributes.map(attr => attr.id)));
+    } else {
+      setSelectedAttributes(new Set());
+    }
+  };
+
+  const handleMassDelete = () => {
+    if (selectedAttributes.size === 0) {
+      setAttributeError('Please select at least one attribute to delete.');
+      return;
+    }
+    setIsMassDeleteModalOpen(true);
+  };
+
+  const handleMassDeleteConfirm = async () => {
+    try {
+      setAttributeError(null);
+      const deletePromises = Array.from(selectedAttributes).map(id => 
+        AttributesService.deleteAttribute(id)
+      );
+      
+      await Promise.all(deletePromises);
+      
+      setSelectedAttributes(new Set());
+      setIsMassDeleteModalOpen(false);
+      await fetchAttributes();
+    } catch (err) {
+      console.error('Error mass deleting attributes:', err);
+      setAttributeError('Failed to delete some attributes. Please try again.');
+    }
+  };
+
+  const handleMassDeleteCancel = () => {
+    setIsMassDeleteModalOpen(false);
+  };
+
+  const handleMassAdd = () => {
+    setMassAddFormData({
+      attributes: '',
+      description: '',
+      bucket_id: null,
+      type: ''
+    });
+    setIsMassAddModalOpen(true);
+  };
+
+  const handleMassAddSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!massAddFormData.attributes.trim()) {
+      setAttributeError('Please enter at least one attribute key.');
+      return;
+    }
+
+    try {
+      setAttributeError(null);
+      
+      // Parse the attributes (one per line or comma-separated)
+      const attributeKeys = massAddFormData.attributes
+        .split(/[\n,]/)
+        .map(key => key.trim())
+        .filter(key => key.length > 0);
+
+      if (attributeKeys.length === 0) {
+        setAttributeError('Please enter at least one valid attribute key.');
+        return;
+      }
+
+      // Create all attributes
+      const createPromises = attributeKeys.map(key =>
+        AttributesService.createAttribute(
+          key,
+          massAddFormData.description.trim() || undefined,
+          massAddFormData.bucket_id || undefined,
+          massAddFormData.type || undefined
+        )
+      );
+
+      await Promise.all(createPromises);
+      
+      setIsMassAddModalOpen(false);
+      setMassAddFormData({
+        attributes: '',
+        description: '',
+        bucket_id: null,
+        type: ''
+      });
+      await fetchAttributes();
+    } catch (err) {
+      console.error('Error mass adding attributes:', err);
+      setAttributeError('Failed to create some attributes. Please try again.');
+    }
+  };
+
+  const handleMassAddCancel = () => {
+    setIsMassAddModalOpen(false);
+    setMassAddFormData({
+      attributes: '',
+      description: '',
+      bucket_id: null,
+      type: ''
+    });
   };
 
   // Facts functions (placeholder)
@@ -361,6 +487,20 @@ const DataManagementTab: React.FC = () => {
             >
               + Add Attribute
             </button>
+            <button 
+              className="mass-add-btn"
+              onClick={handleMassAdd}
+            >
+              + Mass Add
+            </button>
+            {selectedAttributes.size > 0 && (
+              <button 
+                className="mass-delete-btn"
+                onClick={handleMassDelete}
+              >
+                🗑️ Delete Selected ({selectedAttributes.size})
+              </button>
+            )}
           </div>
         </div>
 
@@ -428,6 +568,16 @@ const DataManagementTab: React.FC = () => {
             <table>
               <thead>
                 <tr>
+                  <th>
+                    <input
+                      type="checkbox"
+                      checked={selectedAttributes.size === filteredAttributes.length && filteredAttributes.length > 0}
+                      onChange={(e) => handleSelectAllAttributes(e.target.checked)}
+                      className="select-all-checkbox"
+                      title="Select all attributes"
+                      aria-label="Select all attributes"
+                    />
+                  </th>
                   <th>Key</th>
                   <th>Description</th>
                   <th>Type</th>
@@ -438,6 +588,16 @@ const DataManagementTab: React.FC = () => {
               <tbody>
                 {filteredAttributes.map((attribute) => (
                   <tr key={attribute.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedAttributes.has(attribute.id)}
+                        onChange={(e) => handleSelectAttribute(attribute.id, e.target.checked)}
+                        className="select-checkbox"
+                        title={`Select ${attribute.key}`}
+                        aria-label={`Select ${attribute.key}`}
+                      />
+                    </td>
                     <td className="data-key">{attribute.key}</td>
                     <td className="data-description">
                       {attribute.description || <span className="no-description">No description</span>}
@@ -548,6 +708,128 @@ const DataManagementTab: React.FC = () => {
                   </button>
                   <button type="submit" className="save-btn">
                     {editingAttribute ? 'Update Attribute' : 'Create Attribute'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Mass Delete Confirmation Modal */}
+        {isMassDeleteModalOpen && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h2>Confirm Mass Delete</h2>
+                <button className="close-btn" onClick={handleMassDeleteCancel}>×</button>
+              </div>
+              
+              <div className="modal-body">
+                <div className="warning-message">
+                  <span className="warning-icon">⚠️</span>
+                  <p>Are you sure you want to delete <strong>{selectedAttributes.size}</strong> selected attribute(s)?</p>
+                  <p>This action cannot be undone.</p>
+                </div>
+                
+                <div className="selected-items">
+                  <h4>Selected Attributes:</h4>
+                  <ul>
+                    {filteredAttributes
+                      .filter(attr => selectedAttributes.has(attr.id))
+                      .map(attr => (
+                        <li key={attr.id}>{attr.key}</li>
+                      ))
+                    }
+                  </ul>
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button onClick={handleMassDeleteCancel} className="cancel-btn">
+                  Cancel
+                </button>
+                <button onClick={handleMassDeleteConfirm} className="delete-btn">
+                  Delete {selectedAttributes.size} Attribute(s)
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mass Add Modal */}
+        {isMassAddModalOpen && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h2>Mass Add Attributes</h2>
+                <button className="close-btn" onClick={handleMassAddCancel}>×</button>
+              </div>
+              
+              <form onSubmit={handleMassAddSubmit} className="data-form">
+                <div className="form-group">
+                  <label htmlFor="mass-attributes">Attribute Keys *</label>
+                  <textarea
+                    id="mass-attributes"
+                    value={massAddFormData.attributes}
+                    onChange={(e) => setMassAddFormData({ ...massAddFormData, attributes: e.target.value })}
+                    placeholder="Enter attribute keys, one per line or comma-separated&#10;e.g.:&#10;difficulty&#10;priority&#10;enjoyment&#10;impact"
+                    rows={8}
+                    required
+                    className="form-textarea"
+                  />
+                  <small className="form-help">Enter one attribute key per line or separate with commas</small>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="mass-description">Description (Optional)</label>
+                  <textarea
+                    id="mass-description"
+                    value={massAddFormData.description}
+                    onChange={(e) => setMassAddFormData({ ...massAddFormData, description: e.target.value })}
+                    placeholder="Description that will apply to all attributes..."
+                    rows={3}
+                    className="form-textarea"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="mass-type">Type (Optional)</label>
+                  <input
+                    type="text"
+                    id="mass-type"
+                    value={massAddFormData.type}
+                    onChange={(e) => setMassAddFormData({ ...massAddFormData, type: e.target.value })}
+                    placeholder="e.g., difficulty, rating, duration"
+                    className="form-input"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="mass-bucket">Category (Optional)</label>
+                  <select
+                    id="mass-bucket"
+                    value={massAddFormData.bucket_id || ''}
+                    onChange={(e) => setMassAddFormData({ 
+                      ...massAddFormData, 
+                      bucket_id: e.target.value ? parseInt(e.target.value) : null 
+                    })}
+                    className="form-select"
+                  >
+                    <option value="">No Category</option>
+                    {Object.entries(bucketMap).map(([id, name]) => (
+                      <option key={id} value={id}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-actions">
+                  <button type="button" onClick={handleMassAddCancel} className="cancel-btn">
+                    Cancel
+                  </button>
+                  <button type="submit" className="save-btn">
+                    Create Attributes
                   </button>
                 </div>
               </form>

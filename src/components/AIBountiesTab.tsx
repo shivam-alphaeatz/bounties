@@ -5,6 +5,16 @@ import { PushNotificationService } from '../services/pushNotificationService';
 import { supabase } from '../supabaseClient';
 import './AIBountiesTab.css';
 
+// Import categoryMap for proper category name mapping
+const categoryMap: { [key: number]: string } = {
+  1: 'Nourish',
+  2: 'Rest',
+  3: 'Active Life',
+  4: 'Connect',
+  5: 'Mindset',
+  6: 'Explore'
+};
+
 interface BountyCounts {
   pending: number;
   accepted: number;
@@ -26,6 +36,7 @@ interface BountyToSubmit {
   id: string;
   bounty: string;
   category: string;
+  bucket_id: number;
   date: string;
   expiry_timestamp: string;
   type: string;
@@ -385,9 +396,10 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
     // Use the selected submit date instead of today's date
     const selectedDateString = submitDate;
 
-    // Calculate default expiry (next day 11:59 PM)
-    const defaultExpiry = new Date();
-    defaultExpiry.setDate(defaultExpiry.getDate() + 1);
+    // Calculate default expiry (24 hours after the target date at 11:59 PM)
+    const targetDate = new Date(selectedDateString);
+    const defaultExpiry = new Date(targetDate);
+    defaultExpiry.setDate(targetDate.getDate() + 1);
     defaultExpiry.setHours(23, 59, 0, 0);
 
     // Filter bounties for the selected date
@@ -398,6 +410,7 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
       id: bounty.id,
       bounty: bounty.bounty,
       category: bounty.category,
+      bucket_id: bounty.bucket_id,
       date: selectedDateString,
       expiry_timestamp: defaultExpiry.toISOString(),
       type: bounty.type
@@ -428,9 +441,10 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
       return;
     }
 
-    // Calculate default expiry (next day 11:59 PM)
-    const defaultExpiry = new Date();
-    defaultExpiry.setDate(defaultExpiry.getDate() + 1);
+    // Calculate default expiry (24 hours after the target date at 11:59 PM)
+    const targetDate = new Date(newDate);
+    const defaultExpiry = new Date(targetDate);
+    defaultExpiry.setDate(targetDate.getDate() + 1);
     defaultExpiry.setHours(23, 59, 0, 0);
 
     // Prepare bounties for submission for the selected date
@@ -438,6 +452,7 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
       id: bounty.id,
       bounty: bounty.bounty,
       category: bounty.category,
+      bucket_id: bounty.bucket_id,
       date: newDate,
       expiry_timestamp: defaultExpiry.toISOString(),
       type: bounty.type
@@ -546,12 +561,44 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
     }));
   };
 
-  // Remove bounty from submit modal
-  const removeBountyFromSubmitModal = (index: number) => {
-    setSubmitModal(prev => ({
-      ...prev,
-      bountiesToSubmit: prev.bountiesToSubmit.filter((_, i) => i !== index)
-    }));
+  // Remove bounty from submit modal and revert to pending status
+  const removeBountyFromSubmitModal = async (index: number) => {
+    const bountyToRemove = submitModal.bountiesToSubmit[index];
+    
+    if (!bountyToRemove) return;
+
+    try {
+      // Update the bounty status back to pending in the database
+      const { error } = await supabase
+        .from('bounty_selection_history')
+        .update({ 
+          action: 'pending',
+          date: null, // Clear the date since it's no longer approved
+          notes: null, // Clear approval notes
+          rating: null // Clear approval rating
+        })
+        .eq('id', bountyToRemove.id);
+
+      if (error) {
+        console.error('Error reverting bounty to pending:', error);
+        setError('Failed to remove bounty. Please try again.');
+        return;
+      }
+
+      // Remove from modal display
+      setSubmitModal(prev => ({
+        ...prev,
+        bountiesToSubmit: prev.bountiesToSubmit.filter((_, i) => i !== index)
+      }));
+
+      // Refresh data to update the UI
+      await fetchData();
+      
+      console.log(`Bounty "${bountyToRemove.bounty}" has been moved back to pending status.`);
+    } catch (err) {
+      console.error('Error removing bounty:', err);
+      setError('Failed to remove bounty. Please try again.');
+    }
   };
 
   if (loading) {
@@ -819,7 +866,7 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
             <h3>Reject Bounty</h3>
             <div className="rejection-content">
               <p><strong>Bounty:</strong> {rejectionModal.bounty?.bounty}</p>
-              <p><strong>Category:</strong> {rejectionModal.bounty?.category}</p>
+              <p><strong>Category:</strong> {rejectionModal.bounty ? categoryMap[rejectionModal.bounty.bucket_id] || 'Unknown Category' : ''}</p>
               <div className="form-group">
                 <label htmlFor="rejection-rating">Rating (0-10):</label>
                 <div className="slider-container">
@@ -895,7 +942,7 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
             <h3>Approve Bounty</h3>
             <div className="rejection-content">
               <p><strong>Bounty:</strong> {approvalModal.bounty?.bounty}</p>
-              <p><strong>Category:</strong> {approvalModal.bounty?.category}</p>
+              <p><strong>Category:</strong> {approvalModal.bounty ? categoryMap[approvalModal.bounty.bucket_id] || 'Unknown Category' : ''}</p>
               <div className="form-group">
                 <label htmlFor="approval-date">Target Date:</label>
                 <input
@@ -997,10 +1044,10 @@ const AIBountiesTab: React.FC<AIBountiesTabProps> = ({ onNavigateToAcceptedBount
                   <div key={index} className="bounty-submit-item">
                     <div className="bounty-submit-header">
                       <h4>{bounty.bounty}</h4>
-                      <span className="category-badge">{bounty.category}</span>
+                      <span className="category-badge">{categoryMap[bounty.bucket_id] || 'Unknown Category'}</span>
                       <button 
                         className="remove-bounty-button"
-                        onClick={() => removeBountyFromSubmitModal(index)}
+                        onClick={async () => await removeBountyFromSubmitModal(index)}
                         title="Remove this bounty from submission"
                       >
                         ✕ Remove

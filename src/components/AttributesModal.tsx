@@ -557,25 +557,23 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
               {bountyAttributes.length === 0 ? (
                 <div className="no-attributes">
                   <p>{mode === 'add' ? 'Ready to add attributes to this bounty.' : 'No attributes assigned to this bounty yet.'}</p>
-                  {mode === 'add' && (
-                    <div className="add-options">
-                      <button 
-                        className="generate-button"
-                        onClick={handleGenerateAttributes}
-                        disabled={generatingAttributes || loading}
-                      >
-                        {generatingAttributes ? 'Generating...' : '🎲 Generate Attributes'}
-                      </button>
-                      <div className="or-divider">or</div>
-                      <button 
-                        className="add-first-button"
-                        onClick={handleAddAttribute}
-                        disabled={loading}
-                      >
-                        Add Manually
-                      </button>
-                    </div>
-                  )}
+                  <div className="add-options">
+                    <button 
+                      className="generate-button"
+                      onClick={handleGenerateAttributes}
+                      disabled={generatingAttributes || loading}
+                    >
+                      {generatingAttributes ? 'Generating...' : '🎲 Generate Attributes'}
+                    </button>
+                    <div className="or-divider">or</div>
+                    <button 
+                      className="add-first-button"
+                      onClick={handleAddAttribute}
+                      disabled={loading}
+                    >
+                      Add Manually
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="attributes-list">
