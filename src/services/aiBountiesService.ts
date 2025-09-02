@@ -1,13 +1,13 @@
-import { supabase } from '../supabaseClient';
-import { bucketMap } from '../supabaseClient';
+import { supabase } from "../supabaseClient";
+import { bucketMap } from "../supabaseClient";
 
 export interface AIBounty {
   id: string;
   bucket_id: number;
   category: string;
   bounty: string;
-  action: 'pending' | 'accepted' | 'rejected' | 'finalized';
-  type: 'daily' | 'weekly' | 'yearly';
+  action: "pending" | "accepted" | "rejected" | "finalized";
+  type: "daily" | "weekly" | "yearly";
   created_at: string;
   date?: string;
   notes?: string;
@@ -18,7 +18,7 @@ export interface PendingBounty {
   bucket_id: number;
   category: string;
   bounty: string;
-  type: 'daily' | 'weekly' | 'yearly';
+  type: "daily" | "weekly" | "yearly";
 }
 
 export interface SubmitBountyData {
@@ -32,75 +32,94 @@ export interface BountyToBeSubmitted {
   bounty: string;
   bucket_id: number;
   category: string;
-  type: 'daily' | 'weekly' | 'yearly';
+  type: "daily" | "weekly" | "yearly";
   created_at: string;
 }
 
 export class AIBountiesService {
   // Step A: AI Generation Function (runs independently) -> Step B: Insert into bounty_selection_history (status: pending)
-  static async insertPendingBounties(bounties: PendingBounty[]): Promise<{ inserted: number; duplicates: number; total: number }> {
+  static async insertPendingBounties(
+    bounties: PendingBounty[],
+  ): Promise<{ inserted: number; duplicates: number; total: number }> {
     try {
       // Check for existing bounties to prevent duplicates
       const existingBounties = await supabase
-        .from('bounty_selection_history')
-        .select('bounty, bucket_id, type')
-        .in('action', ['pending', 'accepted'])
-        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()); // Last 24 hours
+        .from("bounty_selection_history")
+        .select("bounty, bucket_id, type")
+        .in("action", ["pending", "accepted"])
+        .gte(
+          "created_at",
+          new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+        ); // Last 24 hours
 
       const existingBountySet = new Set();
       const existingBountyTextSet = new Set(); // For exact text matches
-      
+
       if (existingBounties.data) {
-        existingBounties.data.forEach(bounty => {
-          existingBountySet.add(`${bounty.bounty}-${bounty.bucket_id}-${bounty.type}`);
+        existingBounties.data.forEach((bounty) => {
+          existingBountySet.add(
+            `${bounty.bounty}-${bounty.bucket_id}-${bounty.type}`,
+          );
           existingBountyTextSet.add(bounty.bounty); // Add just the bounty text
         });
       }
 
       // Filter out duplicates - check both combination and exact text
-      const uniqueBounties = bounties.filter(bounty => {
+      const uniqueBounties = bounties.filter((bounty) => {
         const key = `${bounty.bounty}-${bounty.bucket_id}-${bounty.type}`;
-        const isDuplicate = existingBountySet.has(key) || existingBountyTextSet.has(bounty.bounty);
-        
+        const isDuplicate =
+          existingBountySet.has(key) ||
+          existingBountyTextSet.has(bounty.bounty);
+
         if (isDuplicate) {
-          console.log(`Skipping duplicate bounty: "${bounty.bounty}" (bucket_id: ${bounty.bucket_id}, type: ${bounty.type})`);
+          console.log(
+            `Skipping duplicate bounty: "${bounty.bounty}" (bucket_id: ${bounty.bucket_id}, type: ${bounty.type})`,
+          );
         } else {
-          console.log(`New bounty to insert: "${bounty.bounty}" (bucket_id: ${bounty.bucket_id}, type: ${bounty.type})`);
+          console.log(
+            `New bounty to insert: "${bounty.bounty}" (bucket_id: ${bounty.bucket_id}, type: ${bounty.type})`,
+          );
         }
-        
+
         return !isDuplicate;
       });
 
       const duplicates = bounties.length - uniqueBounties.length;
 
       if (uniqueBounties.length === 0) {
-        console.log('All bounties already exist, skipping insertion');
+        console.log("All bounties already exist, skipping insertion");
         return { inserted: 0, duplicates, total: bounties.length };
       }
 
-      console.log(`Inserting ${uniqueBounties.length} unique bounties (filtered from ${bounties.length} total)`);
+      console.log(
+        `Inserting ${uniqueBounties.length} unique bounties (filtered from ${bounties.length} total)`,
+      );
 
-      const pendingBounties = uniqueBounties.map(bounty => ({
+      const pendingBounties = uniqueBounties.map((bounty) => ({
         bucket_id: bounty.bucket_id,
         category: bounty.category,
         bounty: bounty.bounty,
-        action: 'pending' as const,
+        action: "pending" as const,
         type: bounty.type,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
       }));
 
       const { error } = await supabase
-        .from('bounty_selection_history')
+        .from("bounty_selection_history")
         .insert(pendingBounties);
 
       if (error) {
-        console.error('Error inserting pending bounties:', error);
+        console.error("Error inserting pending bounties:", error);
         throw error;
       }
 
-      return { inserted: uniqueBounties.length, duplicates, total: bounties.length };
+      return {
+        inserted: uniqueBounties.length,
+        duplicates,
+        total: bounties.length,
+      };
     } catch (error) {
-      console.error('Failed to insert pending bounties:', error);
+      console.error("Failed to insert pending bounties:", error);
       throw error;
     }
   }
@@ -108,98 +127,124 @@ export class AIBountiesService {
   // Step C: UI fetches all PENDING bounties < 24h
   static async getPendingBounties(): Promise<AIBounty[]> {
     try {
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      
+      const twentyFourHoursAgo = new Date(
+        Date.now() - 24 * 60 * 60 * 1000,
+      ).toISOString();
+
       const { data, error } = await supabase
-        .from('bounty_selection_history')
-        .select('*')
-        .eq('action', 'pending')
-        .gte('created_at', twentyFourHoursAgo)
-        .order('created_at', { ascending: false });
+        .from("bounty_selection_history")
+        .select("*")
+        .eq("action", "pending")
+        .gte("created_at", twentyFourHoursAgo)
+        .order("created_at", { ascending: false });
 
       if (error) {
-        console.error('Error fetching pending bounties:', error);
+        console.error("Error fetching pending bounties:", error);
         throw error;
       }
 
       return data || [];
     } catch (error) {
-      console.error('Failed to fetch pending bounties:', error);
+      console.error("Failed to fetch pending bounties:", error);
       throw error;
     }
   }
 
   // Step D: Admin Reviews -> Step E: Update status = 'accepted'
-  static async approveBounty(bountyId: string, date: string, notes?: string, rating?: number | null): Promise<void> {
+  static async approveBounty(
+    bountyId: string,
+    date: string,
+    notes?: string,
+    rating?: number | null,
+  ): Promise<void> {
     try {
       const updateData: any = {
-        action: 'accepted',
+        action: "accepted",
         date: date,
-        notes: notes
+        notes: notes,
       };
-      
-      if (rating !== undefined && rating !== null && rating >= 0 && rating <= 10) {
+
+      if (
+        rating !== undefined &&
+        rating !== null &&
+        rating >= 0 &&
+        rating <= 10
+      ) {
         updateData.rating = rating;
       } else if (rating === null) {
         updateData.rating = null;
       }
 
       const { error: updateError } = await supabase
-        .from('bounty_selection_history')
+        .from("bounty_selection_history")
         .update(updateData)
-        .eq('id', bountyId);
+        .eq("id", bountyId);
 
       if (updateError) {
-        console.error('Error approving bounty:', updateError);
+        console.error("Error approving bounty:", updateError);
         throw updateError;
       }
-
     } catch (error) {
-      console.error('Failed to approve bounty:', error);
+      console.error("Failed to approve bounty:", error);
       throw error;
     }
   }
 
   // Step D: Admin Reviews -> Step F: Update status = 'rejected'
-  static async rejectBounty(bountyId: string, notes?: string, rating?: number | null): Promise<void> {
+  static async rejectBounty(
+    bountyId: string,
+    notes?: string,
+    rating?: number | null,
+  ): Promise<void> {
     try {
       const updateData: any = {
-        action: 'rejected',
-        notes: notes
+        action: "rejected",
+        notes: notes,
       };
-      
-      if (rating !== undefined && rating !== null && rating > 0 && rating < 10) {
+
+      if (
+        rating !== undefined &&
+        rating !== null &&
+        rating > 0 &&
+        rating < 10
+      ) {
         updateData.rating = rating;
       } else if (rating === null) {
         updateData.rating = null;
       }
 
       const { error } = await supabase
-        .from('bounty_selection_history')
+        .from("bounty_selection_history")
         .update(updateData)
-        .eq('id', bountyId);
+        .eq("id", bountyId);
 
       if (error) {
-        console.error('Error rejecting bounty:', error);
+        console.error("Error rejecting bounty:", error);
         throw error;
       }
     } catch (error) {
-      console.error('Failed to reject bounty:', error);
+      console.error("Failed to reject bounty:", error);
       throw error;
     }
   }
 
   // NEW: Get bounties to be submitted using edge function
-  static async getBountiesToBeSubmitted(date: string): Promise<BountyToBeSubmitted[]> {
+  static async getBountiesToBeSubmitted(
+    date: string,
+  ): Promise<BountyToBeSubmitted[]> {
     try {
-      const response = await fetch('https://nwfhqrmdjmjopbxulyhu.supabase.co/functions/v1/bounties_to_be_submitted', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53Zmhxcm1kam1qb3BieHVseWh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNjc5MDMsImV4cCI6MjA2MTg0MzkwM30.NvbyIKp7BxALfO0SBpdFcbCXXhPcOJ_4YJY8HPyVlzs',
-          'Content-Type': 'application/json'
+      const response = await fetch(
+        "https://nwfhqrmdjmjopbxulyhu.supabase.co/functions/v1/bounties_to_be_submitted",
+        {
+          method: "POST",
+          headers: {
+            Authorization:
+              "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53Zmhxcm1kam1qb3BieHVseWh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyNjc5MDMsImV4cCI6MjA2MTg0MzkwM30.NvbyIKp7BxALfO0SBpdFcbCXXhPcOJ_4YJY8HPyVlzs",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ date }),
         },
-        body: JSON.stringify({ date })
-      });
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -208,13 +253,16 @@ export class AIBountiesService {
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error('Failed to get bounties to be submitted:', error);
+      console.error("Failed to get bounties to be submitted:", error);
       throw error;
     }
   }
 
   // NEW: Submit specific bounties to main table
-  static async submitBountiesToMainTable(bounties: BountyToBeSubmitted[], submitData: SubmitBountyData): Promise<{ successCount: number; errorCount: number }> {
+  static async submitBountiesToMainTable(
+    bounties: BountyToBeSubmitted[],
+    submitData: SubmitBountyData,
+  ): Promise<{ successCount: number; errorCount: number }> {
     try {
       let successCount = 0;
       let errorCount = 0;
@@ -223,19 +271,19 @@ export class AIBountiesService {
         try {
           // Insert into main bounties table
           const { data: bountyData, error: insertError } = await supabase
-            .from('bounties')
+            .from("bounties")
             .insert({
               date: submitData.date,
               bounty: bounty.bounty,
               type: bounty.type,
               target_value: 1,
               lifespan: submitData.lifespan,
-              expiry: submitData.expiry
+              expiry: submitData.expiry,
             })
             .select();
 
           if (insertError) {
-            console.error('Error inserting bounty to main table:', insertError);
+            console.error("Error inserting bounty to main table:", insertError);
             errorCount++;
             continue;
           }
@@ -243,32 +291,32 @@ export class AIBountiesService {
           // If bounty was inserted successfully, add category weight
           if (bountyData && bountyData.length > 0) {
             const bountyId = bountyData[0].id;
-            
+
             // Add category weight
             const { error: weightError } = await supabase
-              .from('bountyBucketWeight')
+              .from("bountyBucketWeight")
               .insert({
                 bountyId: bountyId,
                 bucketId: bounty.bucket_id,
-                weight: 1 // Default weight of 1
+                weight: 1, // Default weight of 1
               });
 
             if (weightError) {
-              console.error('Error saving category weight:', weightError);
+              console.error("Error saving category weight:", weightError);
               // Don't count this as a failure since the bounty was saved
             }
-            
+
             successCount++;
           }
         } catch (bountyError) {
-          console.error('Error processing bounty:', bountyError);
+          console.error("Error processing bounty:", bountyError);
           errorCount++;
         }
       }
 
       return { successCount, errorCount };
     } catch (error) {
-      console.error('Failed to submit bounties to main table:', error);
+      console.error("Failed to submit bounties to main table:", error);
       throw error;
     }
   }
@@ -277,31 +325,33 @@ export class AIBountiesService {
   static async getAllBounties(): Promise<AIBounty[]> {
     try {
       const { data, error } = await supabase
-        .from('bounty_selection_history')
-        .select('*')
-        .in('action', ['pending', 'accepted', 'rejected'])
-        .order('created_at', { ascending: false });
+        .from("bounty_selection_history")
+        .select("*")
+        .in("action", ["pending", "accepted", "rejected"])
+        .order("created_at", { ascending: false });
 
       if (error) {
-        console.error('Error fetching all bounties:', error);
+        console.error("Error fetching all bounties:", error);
         throw error;
       }
 
       return data || [];
     } catch (error) {
-      console.error('Failed to fetch all bounties:', error);
+      console.error("Failed to fetch all bounties:", error);
       throw error;
     }
   }
 
   // Get bounties by status
-  static async getBountiesByStatus(status: 'pending' | 'accepted' | 'rejected' | 'finalized'): Promise<AIBounty[]> {
+  static async getBountiesByStatus(
+    status: "pending" | "accepted" | "rejected" | "finalized",
+  ): Promise<AIBounty[]> {
     try {
       const { data, error } = await supabase
-        .from('bounty_selection_history')
-        .select('*')
-        .eq('action', status)
-        .order('created_at', { ascending: false });
+        .from("bounty_selection_history")
+        .select("*")
+        .eq("action", status)
+        .order("created_at", { ascending: false });
 
       if (error) {
         console.error(`Error fetching ${status} bounties:`, error);
@@ -316,14 +366,19 @@ export class AIBountiesService {
   }
 
   // Get count of bounties by status
-  static async getBountyCounts(): Promise<{ pending: number; accepted: number; rejected: number; finalized: number }> {
+  static async getBountyCounts(): Promise<{
+    pending: number;
+    accepted: number;
+    rejected: number;
+    finalized: number;
+  }> {
     try {
       const { data, error } = await supabase
-        .from('bounty_selection_history')
-        .select('action');
+        .from("bounty_selection_history")
+        .select("action");
 
       if (error) {
-        console.error('Error fetching bounty counts:', error);
+        console.error("Error fetching bounty counts:", error);
         throw error;
       }
 
@@ -331,10 +386,10 @@ export class AIBountiesService {
         pending: 0,
         accepted: 0,
         rejected: 0,
-        finalized: 0
+        finalized: 0,
       };
 
-      data?.forEach(item => {
+      data?.forEach((item) => {
         if (item.action in counts) {
           counts[item.action as keyof typeof counts]++;
         }
@@ -342,7 +397,7 @@ export class AIBountiesService {
 
       return counts;
     } catch (error) {
-      console.error('Failed to fetch bounty counts:', error);
+      console.error("Failed to fetch bounty counts:", error);
       throw error;
     }
   }
@@ -350,22 +405,22 @@ export class AIBountiesService {
   // Get count of today's approved bounties (for submit button)
   static async getTodayApprovedCount(): Promise<number> {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      
+      const today = new Date().toISOString().split("T")[0];
+
       const { data, error } = await supabase
-        .from('bounty_selection_history')
-        .select('id')
-        .eq('action', 'accepted')
-        .eq('date', today);
+        .from("bounty_selection_history")
+        .select("id")
+        .eq("action", "accepted")
+        .eq("date", today);
 
       if (error) {
-        console.error('Error fetching today\'s approved bounties count:', error);
+        console.error("Error fetching today's approved bounties count:", error);
         throw error;
       }
 
       return data?.length || 0;
     } catch (error) {
-      console.error('Failed to fetch today\'s approved bounties count:', error);
+      console.error("Failed to fetch today's approved bounties count:", error);
       throw error;
     }
   }
@@ -373,20 +428,22 @@ export class AIBountiesService {
   // Step K: Background Cleanup: Delete old pending
   static async cleanupOldPendingBounties(): Promise<void> {
     try {
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      
+      const twentyFourHoursAgo = new Date(
+        Date.now() - 24 * 60 * 60 * 1000,
+      ).toISOString();
+
       const { error } = await supabase
-        .from('bounty_selection_history')
+        .from("bounty_selection_history")
         .delete()
-        .eq('action', 'pending')
-        .lt('created_at', twentyFourHoursAgo);
+        .eq("action", "pending")
+        .lt("created_at", twentyFourHoursAgo);
 
       if (error) {
-        console.error('Error cleaning up old pending bounties:', error);
+        console.error("Error cleaning up old pending bounties:", error);
         throw error;
       }
     } catch (error) {
-      console.error('Failed to cleanup old pending bounties:', error);
+      console.error("Failed to cleanup old pending bounties:", error);
       throw error;
     }
   }
@@ -395,39 +452,45 @@ export class AIBountiesService {
   static async cleanupAllPendingBounties(): Promise<void> {
     try {
       const { error } = await supabase
-        .from('bounty_selection_history')
+        .from("bounty_selection_history")
         .delete()
-        .eq('action', 'pending');
+        .eq("action", "pending");
 
       if (error) {
-        console.error('Error cleaning up all pending bounties:', error);
+        console.error("Error cleaning up all pending bounties:", error);
         throw error;
       }
     } catch (error) {
-      console.error('Failed to cleanup all pending bounties:', error);
+      console.error("Failed to cleanup all pending bounties:", error);
       throw error;
     }
   }
 
   // Get count of pending bounties by age
-  static async getPendingBountyCounts(): Promise<{ total: number; old: number; recent: number }> {
+  static async getPendingBountyCounts(): Promise<{
+    total: number;
+    old: number;
+    recent: number;
+  }> {
     try {
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      
+      const twentyFourHoursAgo = new Date(
+        Date.now() - 24 * 60 * 60 * 1000,
+      ).toISOString();
+
       // Get total pending count
       const { data: totalData, error: totalError } = await supabase
-        .from('bounty_selection_history')
-        .select('id')
-        .eq('action', 'pending');
+        .from("bounty_selection_history")
+        .select("id")
+        .eq("action", "pending");
 
       if (totalError) throw totalError;
 
       // Get old pending count (older than 24 hours)
       const { data: oldData, error: oldError } = await supabase
-        .from('bounty_selection_history')
-        .select('id')
-        .eq('action', 'pending')
-        .lt('created_at', twentyFourHoursAgo);
+        .from("bounty_selection_history")
+        .select("id")
+        .eq("action", "pending")
+        .lt("created_at", twentyFourHoursAgo);
 
       if (oldError) throw oldError;
 
@@ -437,7 +500,7 @@ export class AIBountiesService {
 
       return { total, old, recent };
     } catch (error) {
-      console.error('Failed to get pending bounty counts:', error);
+      console.error("Failed to get pending bounty counts:", error);
       throw error;
     }
   }
@@ -445,37 +508,80 @@ export class AIBountiesService {
   // Get bounties from main bounties table by date
   static async getBountiesByDate(date: string): Promise<BountyToBeSubmitted[]> {
     try {
-      // Fetch bounties from main table for the specified date
+      const selectedDate = new Date(date);
+
+      // Fetch all bounties from main table and filter based on lifespan/expiry
       const { data: bountiesData, error: bountiesError } = await supabase
-        .from('bounties')
-        .select('*')
-        .eq('date', date)
-        .order('created_at', { ascending: false });
+        .from("bounties")
+        .select("*")
+        .order("created_at", { ascending: false });
 
       if (bountiesError) {
-        console.error('Error fetching bounties from main table:', bountiesError);
+        console.error(
+          "Error fetching bounties from main table:",
+          bountiesError,
+        );
         throw bountiesError;
       }
 
       // Fetch bucket weights to get category information
-      const { data: bucketWeightsData, error: bucketWeightsError } = await supabase
-        .from('bountyBucketWeight')
-        .select('*');
+      const { data: bucketWeightsData, error: bucketWeightsError } =
+        await supabase.from("bountyBucketWeight").select("*");
 
       if (bucketWeightsError) {
-        console.error('Error fetching bucket weights:', bucketWeightsError);
+        console.error("Error fetching bucket weights:", bucketWeightsError);
         throw bucketWeightsError;
       }
 
+      // Filter bounties that are active on the selected date
+      const activeBounties = bountiesData.filter((bounty: any) => {
+        const bountyDate = new Date(bounty.date);
+
+        // For daily bounties, check exact date match
+        if (bounty.type === "daily") {
+          return bountyDate.toDateString() === selectedDate.toDateString();
+        }
+
+        // For weekly/yearly bounties, check if selected date is within the bounty's lifespan
+        if (bounty.type === "weekly" || bounty.type === "yearly") {
+          // Check if bounty has started
+          if (bountyDate > selectedDate) {
+            return false;
+          }
+
+          // Check expiry date if it exists
+          if (bounty.expiry) {
+            const expiryDate = new Date(bounty.expiry);
+            return selectedDate <= expiryDate;
+          }
+
+          // Check lifespan if no expiry date
+          if (bounty.lifespan) {
+            const endDate = new Date(bountyDate);
+            endDate.setDate(endDate.getDate() + bounty.lifespan);
+            return selectedDate <= endDate;
+          }
+
+          // If no expiry or lifespan, assume it's still active
+          return true;
+        }
+
+        // For other types, default to date match
+        return bountyDate.toDateString() === selectedDate.toDateString();
+      });
+
       // Map bounties to BountyToBeSubmitted format with category information
-      const bountiesWithCategories = bountiesData.map((bounty: any) => {
+      const bountiesWithCategories = activeBounties.map((bounty: any) => {
         // Find the bucket weight for this bounty
-        const bucketWeight = bucketWeightsData.find((weight: any) => weight.bountyId === bounty.id);
-        
+        const bucketWeight = bucketWeightsData.find(
+          (weight: any) => weight.bountyId === bounty.id,
+        );
+
         // Get category name from bucketMap
-        const category = bucketWeight ? 
-          bucketMap[bucketWeight.bucketId as keyof typeof bucketMap] || 'Unknown' : 
-          'Unknown';
+        const category = bucketWeight
+          ? bucketMap[bucketWeight.bucketId as keyof typeof bucketMap] ||
+            "Unknown"
+          : "Unknown";
 
         return {
           id: bounty.id,
@@ -483,14 +589,14 @@ export class AIBountiesService {
           bucket_id: bucketWeight?.bucketId || 0,
           category: category,
           type: bounty.type,
-          created_at: bounty.created_at
+          created_at: bounty.created_at,
         };
       });
 
       return bountiesWithCategories || [];
     } catch (error) {
-      console.error('Failed to get bounties by date:', error);
+      console.error("Failed to get bounties by date:", error);
       throw error;
     }
   }
-} 
+}
