@@ -53,10 +53,9 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
 
-  // Hints state
-  const [hints, setHints] = useState<BountyHint[]>([]);
+  // Hints state - simplified for single hint per bounty
+  const [hint, setHint] = useState<BountyHint | null>(null);
   const [showHintForm, setShowHintForm] = useState(false);
-  const [editingHint, setEditingHint] = useState<BountyHint | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
   const [hintFormData, setHintFormData] = useState({
     hint: "",
@@ -115,28 +114,20 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
         typeof bountyId,
       );
 
-      const [attributesData, bountyAttributesData, imageData, hintsData] =
+      const [attributesData, bountyAttributesData, imageData, hintData] =
         await Promise.all([
           AttributesService.getAttributesByBucket(bucketId),
           AttributesService.getBountyAttributes(bountyId),
           BountyImageService.getBountyImage(bountyId),
-          BountyHintsService.getBountyHints(bountyId),
+          BountyHintsService.getBountyHint(bountyId),
         ]);
 
       setAttributes(attributesData);
       setBountyAttributes(bountyAttributesData);
       setCurrentImageUrl(imageData);
-      setHints(hintsData);
+      setHint(hintData);
 
-      console.log("DEBUG: AttributesModal - loaded hints:", hintsData);
-      console.log("DEBUG: AttributesModal - hints count:", hintsData.length);
-      if (hintsData.length > 0) {
-        console.log("DEBUG: AttributesModal - first hint:", hintsData[0]);
-        console.log(
-          "DEBUG: AttributesModal - first hint keys:",
-          Object.keys(hintsData[0]),
-        );
-      }
+      console.log("DEBUG: AttributesModal - loaded hint:", hintData);
     } catch (err) {
       console.error("Error loading data:", err);
       setError("Failed to load attributes data");
@@ -364,9 +355,8 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
     setError(null);
   };
 
-  // Hint handling functions
+  // Hint handling functions - simplified for single hint
   const handleAddHint = () => {
-    setEditingHint(null);
     setHintFormData({
       hint: "",
       type: "tip",
@@ -374,57 +364,30 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
     setShowHintForm(true);
   };
 
-  const handleEditHint = (hint: BountyHint) => {
-    setEditingHint(hint);
-    setHintFormData({
-      hint: hint.hint,
-      type: hint.type,
-    });
-    setShowHintForm(true);
+  const handleEditHint = () => {
+    if (hint) {
+      setHintFormData({
+        hint: hint.hint,
+        type: hint.type,
+      });
+      setShowHintForm(true);
+    }
   };
 
-  const handleDeleteHint = async (hintIndex: number) => {
-    console.log("DEBUG: handleDeleteHint called with hintIndex:", hintIndex);
-
+  const handleDeleteHint = async () => {
     if (!window.confirm("Are you sure you want to delete this hint?")) {
       return;
     }
 
     try {
       setHintLoading(true);
-      console.log("DEBUG: About to call deleteHintByIndex with:", hintIndex);
-      await BountyHintsService.deleteHintByIndex(bountyId, hintIndex);
-      console.log("DEBUG: deleteHintByIndex completed successfully");
+      await BountyHintsService.deleteBountyHint(bountyId);
       await loadData();
       onAttributesUpdated();
     } catch (err) {
       console.error("Error deleting hint:", err);
       setError(
         `Failed to delete hint: ${err instanceof Error ? err.message : "Unknown error"}`,
-      );
-    } finally {
-      setHintLoading(false);
-    }
-  };
-
-  const handleDeleteAllHints = async () => {
-    if (
-      !window.confirm(
-        "Are you sure you want to delete ALL hints for this bounty? This action cannot be undone.",
-      )
-    ) {
-      return;
-    }
-
-    try {
-      setHintLoading(true);
-      await BountyHintsService.deleteAllBountyHints(bountyId);
-      await loadData();
-      onAttributesUpdated();
-    } catch (err) {
-      console.error("Error deleting all hints:", err);
-      setError(
-        `Failed to delete all hints: ${err instanceof Error ? err.message : "Unknown error"}`,
       );
     } finally {
       setHintLoading(false);
@@ -439,41 +402,19 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
       return;
     }
 
-    console.log("DEBUG: handleHintSubmit called", {
-      isEditing: !!editingHint,
-      editingHintId: editingHint?.id,
-      bountyId,
-      hint: hintFormData.hint,
-      type: hintFormData.type,
-    });
-
     try {
       setHintLoading(true);
       setError(null);
 
-      if (editingHint) {
-        console.log("DEBUG: Updating existing hint with ID:", editingHint.id);
-        // Update existing hint
-        await BountyHintsService.updateBountyHint(
-          editingHint.id!,
-          hintFormData.hint,
-          hintFormData.type,
-        );
-        console.log("DEBUG: Update completed successfully");
-      } else {
-        console.log("DEBUG: Adding new hint for bountyId:", bountyId);
-        // Add new hint
-        const newHint = await BountyHintsService.addBountyHint(
-          bountyId,
-          hintFormData.hint,
-          hintFormData.type,
-        );
-        console.log("DEBUG: Add completed successfully, new hint:", newHint);
-      }
+      // Always use saveOrUpdateBountyHint (upsert)
+      await BountyHintsService.saveOrUpdateBountyHint(
+        bountyId,
+        hintFormData.hint,
+        hintFormData.type,
+      );
 
       await loadData();
       setShowHintForm(false);
-      setEditingHint(null);
       onAttributesUpdated();
     } catch (err) {
       console.error("Error saving hint:", err);
@@ -487,7 +428,6 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
 
   const handleHintCancel = () => {
     setShowHintForm(false);
-    setEditingHint(null);
     setHintFormData({
       hint: "",
       type: "tip",
@@ -977,87 +917,70 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
             </div>
           )}
 
-          {/* Hints Section */}
+          {/* Hints Section - simplified for single hint */}
           {!showHintForm && (
             <div className="hints-section">
               <div className="section-header">
-                <h3>Bounty Hints</h3>
+                <h3>Bounty Hint</h3>
                 <div className="hints-header-actions">
-                  <button
-                    className="add-button"
-                    onClick={handleAddHint}
-                    disabled={hintLoading}
-                  >
-                    Add Hint
-                  </button>
-                  {hints.length > 0 && (
+                  {!hint ? (
                     <button
-                      className="delete-all-button"
-                      onClick={handleDeleteAllHints}
+                      className="add-button"
+                      onClick={handleAddHint}
                       disabled={hintLoading}
-                      title="Delete all hints for this bounty"
                     >
-                      Delete All
+                      Add Hint
                     </button>
+                  ) : (
+                    <>
+                      <button
+                        className="edit-button"
+                        onClick={handleEditHint}
+                        disabled={hintLoading}
+                      >
+                        Edit Hint
+                      </button>
+                      <button
+                        className="delete-all-button"
+                        onClick={handleDeleteHint}
+                        disabled={hintLoading}
+                        title="Delete hint for this bounty"
+                      >
+                        Delete
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
 
-              {hints.length === 0 ? (
+              {!hint ? (
                 <div className="no-hints">
                   <div className="empty-state">
                     <span className="empty-icon">💡</span>
-                    <p>No hints added yet</p>
+                    <p>No hint added yet</p>
                     <small>
-                      Add helpful tips and information for this bounty
+                      Add helpful tip or information for this bounty
                     </small>
                   </div>
                 </div>
               ) : (
                 <div className="hints-list">
-                  {hints.map((hint, index) => (
-                    <div
-                      key={`hint-${index}`}
-                      className={`hint-item hint-${hint.type}`}
-                    >
-                      <div className="hint-content">
-                        <div className="hint-type-icon">
-                          {hint.type === "tip" && "💡"}
-                          {hint.type === "warning" && "⚠️"}
-                          {hint.type === "info" && "ℹ️"}
-                        </div>
-                        <div className="hint-text">
-                          <p>{hint.hint}</p>
-                          <small className="hint-meta">
-                            {hint.type} •{" "}
-                            {new Date(hint.created_at).toLocaleDateString()}
-                          </small>
-                        </div>
+                  <div className={`hint-item hint-${hint.type}`}>
+                    <div className="hint-content">
+                      <div className="hint-type-icon">
+                        {hint.type === "tip" && "💡"}
+                        {hint.type === "warning" && "⚠️"}
+                        {hint.type === "info" && "ℹ️"}
                       </div>
-                      <div className="hint-actions">
-                        <button
-                          className="edit-button"
-                          onClick={() => handleEditHint(hint)}
-                          disabled={hintLoading}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="delete-button"
-                          onClick={() => {
-                            console.log(
-                              "DEBUG: Delete button clicked for hint at index:",
-                              index,
-                            );
-                            handleDeleteHint(index);
-                          }}
-                          disabled={hintLoading}
-                        >
-                          Delete
-                        </button>
+                      <div className="hint-text">
+                        <p>{hint.hint}</p>
+                        <small className="hint-meta">
+                          {hint.type} •{" "}
+                          {new Date(hint.created_at).toLocaleDateString()}
+                        </small>
                       </div>
                     </div>
-                  ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -1065,7 +988,7 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
 
           {showHintForm && (
             <div className="hint-form">
-              <h3>{editingHint ? "Edit Hint" : "Add New Hint"}</h3>
+              <h3>{hint ? "Edit Hint" : "Add New Hint"}</h3>
 
               <form onSubmit={handleHintSubmit}>
                 <div className="form-group">
@@ -1117,7 +1040,7 @@ const AttributesModal: React.FC<AttributesModalProps> = ({
                   >
                     {hintLoading
                       ? "Saving..."
-                      : editingHint
+                      : hint
                         ? "Update Hint"
                         : "Add Hint"}
                   </button>

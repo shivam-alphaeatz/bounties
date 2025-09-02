@@ -1,22 +1,19 @@
 -- Create the bounty_hint table for storing hints related to bounties
+-- One bounty can have only one hint
 CREATE TABLE IF NOT EXISTS bounty_hint (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    bounty_id TEXT NOT NULL,
+    bounty_id TEXT PRIMARY KEY,
     hint TEXT NOT NULL,
     type TEXT NOT NULL DEFAULT 'tip' CHECK (type IN ('tip', 'warning', 'info')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create indexes for better query performance
-CREATE INDEX IF NOT EXISTS idx_bounty_hint_id ON bounty_hint(id);
-CREATE INDEX IF NOT EXISTS idx_bounty_hint_bounty_id ON bounty_hint(bounty_id);
 CREATE INDEX IF NOT EXISTS idx_bounty_hint_type ON bounty_hint(type);
 CREATE INDEX IF NOT EXISTS idx_bounty_hint_created_at ON bounty_hint(created_at);
 
 -- Add comments to the table and columns
-COMMENT ON TABLE bounty_hint IS 'Stores helpful hints and tips for bounties';
-COMMENT ON COLUMN bounty_hint.id IS 'Primary key UUID for the hint';
-COMMENT ON COLUMN bounty_hint.bounty_id IS 'Reference to the bounty ID (can be UUID or integer as string)';
+COMMENT ON TABLE bounty_hint IS 'Stores helpful hints and tips for bounties - one hint per bounty';
+COMMENT ON COLUMN bounty_hint.bounty_id IS 'Primary key - reference to the bounty ID (can be UUID or integer as string)';
 COMMENT ON COLUMN bounty_hint.hint IS 'The hint text content';
 COMMENT ON COLUMN bounty_hint.type IS 'Type of hint: tip, warning, or info';
 COMMENT ON COLUMN bounty_hint.created_at IS 'When the hint was created';

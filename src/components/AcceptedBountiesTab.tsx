@@ -50,16 +50,16 @@ const AcceptedBountiesTab: React.FC = () => {
       const bountiesWithAttributes = await Promise.all(
         bounties.map(async (bounty) => {
           try {
-            const [attributes, imageUrl, hints] = await Promise.all([
+            const [attributes, imageUrl, hint] = await Promise.all([
               AttributesService.getBountyAttributes(bounty.id.toString()),
               BountyImageService.getBountyImage(bounty.id.toString()),
-              BountyHintsService.getBountyHints(bounty.id.toString()),
+              BountyHintsService.getBountyHint(bounty.id.toString()),
             ]);
             return {
               ...bounty,
               attributes,
               imageUrl,
-              hints,
+              hints: hint ? [hint] : [],
             };
           } catch (err) {
             console.error(`Error fetching data for bounty ${bounty.id}:`, err);
